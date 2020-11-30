@@ -8,6 +8,11 @@ class TestBeds(Enum):
    WALL2 = "urn:publicid:IDN+wall2.ilabt.iminds.be+authority+cm"
    CITY = "urn:publicid:IDN+lab.cityofthings.eu+authority+cm"
 
+class Ubuntu(Enum):
+   WALL1 = "urn:publicid:IDN+wall1.ilabt.iminds.be+image+emulab-ops:UBUNTU18-64-STD"
+   WALL2 = "urn:publicid:IDN+wall1.ilabt.iminds.be+image+emulab-ops:UBUNTU18-64-STD"
+   CITY = "urn:publicid:IDN+lab.cityofthings.eu+image+emulab-ops:UBUNTU18-64-CoT-armgcc"
+
 class Spec:
 
    def __init__(self):
@@ -31,14 +36,14 @@ class Spec:
       self._id_link_+=1
       return ret
 
-   def create_interface(self, node):
+   def create_interface(self, node, same_testbed):
       max = -1
-      for interface in node["if"]:
+      for (interface,same) in node["if"]:
          id = int(interface[2:])
          if id > max:
             max = id
       id = "if"+str(max+1)
-      node["if"].append(id)
+      node["if"].append((id,same_testbed))
       return id
 
    def setLinkLatCap(self, node1: int, node2:int, latency: int=None, capacity: int=None, packet_loss: str=None):
@@ -65,50 +70,64 @@ class Spec:
                if n1 == n2:
                   monotonic=True
                continue
+            same_testbed = False
             if v1["testbed"] == v2["testbed"]:
-               id = self.create_id_link()
-               if1 = self.create_interface(nodes[n1])
-               if2 = self.create_interface(nodes[n2])
-               link_type = "lan"
-               if v1["testbed"] == TestBeds.CITY:
-                  link_type = "gre-tunnel"
-               links["link"+str(id)] = {"testbed": v1["testbed"], "interfaces":[n1+":"+if1,n2+":"+if2], "link_type": link_type}
+               same_testbed = True
+            id = self.create_id_link()
+            if1 = self.create_interface(nodes[n1],same_testbed)
+            if2 = self.create_interface(nodes[n2],same_testbed)
+            link_type = "lan"
+            if v1["testbed"] == TestBeds.CITY:
+               link_type = "gre-tunnel"
+            links["link"+str(id)] = {"testbed": v1["testbed"], "interfaces":[n1+":"+if1,n2+":"+if2], "link_type": link_type, "same_testbed": same_testbed}
 
 
    def create_nodes(self, num: int, testbed: TestBeds):
       nodes= self.spec["nodes"]
       for i in range(num):
          id = self.create_id_node()
-         nodes["node"+str(id)] = {"testbed": testbed, "if": []}
+         image = Ubuntu.WALL1
+         if testbed == TestBeds.WALL2:
+            image = Ubuntu.WALL1
+         elif testbed == TestBeds.CITY:
+            image = Ubuntu.CITY
+         nodes["node"+str(id)] = {"testbed": testbed, "image": image,"if": []}
 
    def print_spec(self):
       text = self.start
       nodes= self.spec["nodes"]
       links= self.spec["links"]
+      x = 0
+      y = 0
       for n,v in nodes.items():
-         text+= '<node client_id="%s" component_manager_id="%s">\n<sliver_type name="raw-pc"/>\n'%(n,v["testbed"].value)
-         for interface in v["if"]:
-            text+= '<interface client_id="%s:%s">\n<ip address="192.168.0.%d" netmask="255.255.255.0" type="ipv4"/>\n</interface>'%(n,interface, int(n[4:])+1)
+         text+= '<node client_id="%s" component_manager_id="%s">\n<sliver_type name="raw-pc">\n<disk_image name="%s"/>\n</sliver_type>\n'%(n,v["testbed"].value,v["image"].value)
+         text+= '<location xmlns="http://jfed.iminds.be/rspec/ext/jfed/1" x="%d" y="%d"/>\n'%(x,y)
+         x+=10
+         y+=10
+         for (interface,same_testbed) in v["if"]:
+            if same_testbed:
+               text+= '<interface client_id="%s:%s">\n<ip address="192.168.0.%d" netmask="255.255.255.0" type="ipv4"/>\n</interface>'%(n,interface, int(n[4:])+1)
          text+= '</node>\n'
       for l,v in links.items():
-         text+= '<link client_id="%s">\n<component_manager name="%s"/>\n'%(l,v["testbed"].value)
-         for interface in v["interfaces"]:
-            text+= '<interface_ref client_id="%s"/>\n'%interface
-         text+= '<link_type name="%s"/>\n'%v["link_type"]
-         if v["testbed"] != TestBeds.CITY:
-            for interface1 in v["interfaces"]:
-               for interface2 in v["interfaces"]:
-                  if not("capacity" in v or "latency" in v or "packet_loss" in v):
-                     continue
-                  text+= '<property source_id="%s" dest_id="%s"'%(interface1, interface2)
-                  if "capacity" in v:
-                     text+= ' capacity="%d"'%v["capacity"]
-                  if "latency" in v:
-                     text+= ' latency="%d"'%v["latency"]
-                  if "packet_loss" in v:
-                     text+= ' packet_loss="%s"'%v["packet_loss"]
-                  text+= '/>\n'
-         text+= '</link>'
+         if v["same_testbed"]:
+            text+= '<link client_id="%s">\n<component_manager name="%s"/>\n'%(l,v["testbed"].value)
+            for interface in v["interfaces"]:
+               text+= '<interface_ref client_id="%s"/>\n'%interface
+            text+= '<link_type name="%s"/>\n'%v["link_type"]
+            if v["testbed"] != TestBeds.CITY:
+               for interface1 in v["interfaces"]:
+                  for interface2 in v["interfaces"]:
+                     if not("capacity" in v or "latency" in v or "packet_loss" in v) or interface1 == interface2:
+                        continue
+                     text+= '<property source_id="%s" dest_id="%s"'%(interface1, interface2)
+                     if "capacity" in v:
+                        text+= ' capacity="%d"'%v["capacity"]
+                     if "latency" in v:
+                        text+= ' latency="%d"'%v["latency"]
+                     if "packet_loss" in v:
+                        text+= ' packet_loss="%s"'%v["packet_loss"]
+                     text+= '/>\n'
+            text+= '</link>'
       text+=self.end
       return text
 
