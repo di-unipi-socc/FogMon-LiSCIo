@@ -9,3 +9,4 @@ libsqlitefunctions.so
 tests/CTestTestfile.cmake
 tests/UnitTests
 .vscode
+build

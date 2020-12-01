@@ -345,13 +345,14 @@ std::string Connections::getSource(int fd, Message &m) {
 
     len = sizeof(addr);
     getpeername(fd, (struct sockaddr*)&addr, &len);
-
+    string strHostName = "";
+    int status;
     {
         char host[512];
-
         status=getnameinfo((struct sockaddr*)&addr,len,host,512,0,0,0);
 
-        printf("source: %s",host);
+        printf("source [%d]: %s\n",status,host);
+        strHostName = string(host);
     }
 
     if(addr.ss_family == AF_INET) {
@@ -374,7 +375,9 @@ std::string Connections::getSource(int fd, Message &m) {
     if(strcmp(ip,"127.0.0.1")==0)
         strcpy(ip,"::1");
     string strIp = string(ip);
-
+    if(strcmp(ip,"::1")!=0 && status==0) {
+        strIp = strHostName;
+    }
     //change the ip of the sender
     {
         Message::node node = m.getSender();

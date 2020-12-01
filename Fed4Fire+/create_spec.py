@@ -22,6 +22,7 @@ docker = [
    "sudo DEBIAN_FRONTEND=noninteractive apt -y install apt-transport-https ca-certificates curl gnupg-agent software-properties-common",
    "sudo apt remove docker docker-engine docker.io containerd runc",
    "curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add -",
+   "curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add -",
    "sudo add-apt-repository &quot;deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable&quot;",
    "sudo apt update",
    "sudo apt install -y docker-ce docker-ce-cli containerd.io",
@@ -122,7 +123,8 @@ class Spec:
          y+=10
          for (interface,same_testbed) in v["if"]:
             if same_testbed:
-               text+= '<interface client_id="%s:%s">\n<ip address="192.168.%d.%d" netmask="255.255.255.0" type="ipv4"/>\n</interface>'%(n,interface, int(interface[2:]),int(n[4:])+1)
+               text+= '<interface client_id="%s:%s"/>'%(n,interface)
+               # text+= '<interface client_id="%s:%s">\n<ip address="192.168.%d.%d" netmask="255.255.255.0" type="ipv4"/>\n</interface>'%(n,interface, int(interface[2:]),int(n[4:])+1)
          text+= '<services>\n'
          if v["testbed"] != TestBeds.CITY:
             for s in enable_nat:
