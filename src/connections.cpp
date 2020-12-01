@@ -350,8 +350,6 @@ std::string Connections::getSource(int fd, Message &m) {
     {
         char host[512];
         status=getnameinfo((struct sockaddr*)&addr,len,host,512,0,0,0);
-
-        printf("source [%d]: %s\n",status,host);
         strHostName = string(host);
     }
 
