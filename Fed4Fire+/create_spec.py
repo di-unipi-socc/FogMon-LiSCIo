@@ -3,32 +3,15 @@ from enum import Enum
 from xml.dom import minidom
 import xml.etree.ElementTree as ET
 
-class TestBeds(Enum):
+class TestBeds(str, Enum):
    WALL1 = "urn:publicid:IDN+wall1.ilabt.iminds.be+authority+cm"
    WALL2 = "urn:publicid:IDN+wall2.ilabt.iminds.be+authority+cm"
    CITY = "urn:publicid:IDN+lab.cityofthings.eu+authority+cm"
 
-class Ubuntu(Enum):
+class Ubuntu(str, Enum):
    WALL1 = "urn:publicid:IDN+wall1.ilabt.iminds.be+image+emulab-ops:UBUNTU18-64-STD"
    WALL2 = "urn:publicid:IDN+wall1.ilabt.iminds.be+image+emulab-ops:UBUNTU18-64-STD"
    CITY = "urn:publicid:IDN+lab.cityofthings.eu+image+emulab-ops:UBUNTU18-64-CoT-armgcc"
-
-user = "marcog"
-
-enable_nat = ["wget -O - -nv https://www.wall2.ilabt.iminds.be/enable-nat.sh | sudo bash"]
-
-docker = [
-   "sudo apt -y update",
-   "sudo DEBIAN_FRONTEND=noninteractive apt -y install apt-transport-https ca-certificates curl gnupg-agent software-properties-common",
-   "sudo apt remove docker docker-engine docker.io containerd runc",
-   "curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add -",
-   "curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add -",
-   "sudo add-apt-repository &quot;deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable&quot;",
-   "sudo apt update",
-   "sudo apt install -y docker-ce docker-ce-cli containerd.io",
-   f"sudo usermod -aG docker {user}",
-   "newgrp docker"
-]
 
 class Spec:
 
@@ -125,13 +108,14 @@ class Spec:
             if same_testbed:
                text+= '<interface client_id="%s:%s"/>'%(n,interface)
                # text+= '<interface client_id="%s:%s">\n<ip address="192.168.%d.%d" netmask="255.255.255.0" type="ipv4"/>\n</interface>'%(n,interface, int(interface[2:]),int(n[4:])+1)
-         text+= '<services>\n'
-         if v["testbed"] != TestBeds.CITY:
-            for s in enable_nat:
-               text+= f'<execute shell="sh" command="{s}"/>\n'
-         for s in docker:
-            text+= f'<execute shell="sh" command="{s}"/>\n'
-         text+= '</services>\n</node>\n'
+         # text+= '<services>\n'
+         # if v["testbed"] != TestBeds.CITY:
+         #    for s in enable_nat:
+         #       text+= f'<execute shell="sh" command="{s}"/>\n'
+         # for s in docker:
+         #    text+= f'<execute shell="sh" command="{s}"/>\n'
+         # text+= '</services>\n
+         text+= '</node>\n'
       for l,v in links.items():
          if v["same_testbed"]:
             text+= '<link client_id="%s">\n<component_manager name="%s"/>\n'%(l,v["testbed"].value)
@@ -159,7 +143,7 @@ class Spec:
 spec = Spec()
 
 #spec.create_nodes(2, TestBeds.WALL1)
-spec.create_nodes(4, TestBeds.WALL2)
+spec.create_nodes(2, TestBeds.WALL2)
 #spec.create_nodes(3, TestBeds.CITY)
 
 spec.create_links()
@@ -169,4 +153,6 @@ spec.setLinkLatCap(0,1,10,100)
 
 print(spec.print_spec())
 print("\n\n\n")
-print(spec.spec)
+import json
+with open("spec.json","w") as wr:
+   json.dump(spec.spec, wr)

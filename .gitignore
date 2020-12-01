@@ -10,3 +10,5 @@ tests/CTestTestfile.cmake
 tests/UnitTests
 .vscode
 build
+spec.json
+Fed4Fire+/*.zip
