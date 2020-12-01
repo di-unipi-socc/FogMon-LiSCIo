@@ -13,15 +13,28 @@ class Ubuntu(Enum):
    WALL2 = "urn:publicid:IDN+wall1.ilabt.iminds.be+image+emulab-ops:UBUNTU18-64-STD"
    CITY = "urn:publicid:IDN+lab.cityofthings.eu+image+emulab-ops:UBUNTU18-64-CoT-armgcc"
 
+user = "marcog"
+
+enable_nat = ["wget -O - -nv https://www.wall2.ilabt.iminds.be/enable-nat.sh | sudo bash"]
+
+docker = [
+   "sudo apt -y update",
+   "sudo DEBIAN_FRONTEND=noninteractive apt -y install apt-transport-https ca-certificates curl gnupg-agent software-properties-common",
+   "sudo apt remove docker docker-engine docker.io containerd runc",
+   "curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add -",
+   "sudo add-apt-repository &quot;deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable&quot;",
+   "sudo apt update",
+   "sudo apt install -y docker-ce docker-ce-cli containerd.io",
+   f"sudo usermod -aG docker {user}",
+   "newgrp docker"
+]
+
 class Spec:
 
    def __init__(self):
       self.start = """<?xml version='1.0'?>
       <rspec xmlns="http://www.geni.net/resources/rspec/3" type="request" generated_by="jFed RSpec Editor" generated="2020-11-30T18:35:22.186+01:00" xmlns:emulab="http://www.protogeni.net/resources/rspec/ext/emulab/1" xmlns:delay="http://www.protogeni.net/resources/rspec/ext/delay/1" xmlns:jfed-command="http://jfed.iminds.be/rspec/ext/jfed-command/1" xmlns:client="http://www.protogeni.net/resources/rspec/ext/client/1" xmlns:jfed-ssh-keys="http://jfed.iminds.be/rspec/ext/jfed-ssh-keys/1" xmlns:jfed="http://jfed.iminds.be/rspec/ext/jfed/1" xmlns:sharedvlan="http://www.protogeni.net/resources/rspec/ext/shared-vlan/1" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.geni.net/resources/rspec/3 http://www.geni.net/resources/rspec/3/request.xsd ">"""
       self.end = "</rspec>"
-
-      self.nodes = ""
-      self.links = ""
       self.spec = {"nodes": {}, "links": {}}
 
    _id_node_ = 0
@@ -36,15 +49,19 @@ class Spec:
       self._id_link_+=1
       return ret
 
-   def create_interface(self, node, same_testbed):
-      max = -1
-      for (interface,same) in node["if"]:
-         id = int(interface[2:])
-         if id > max:
-            max = id
-      id = "if"+str(max+1)
-      node["if"].append((id,same_testbed))
-      return id
+   def create_interface(self, node1, node2, same_testbed):
+      new = 0
+      arr = [int(interface[2:]) for (interface,same) in node1["if"]]+[int(interface[2:]) for (interface,same) in node2["if"]]
+      arr.sort()
+      for new in range(255):
+         if new not in arr:
+            id = "if"+str(new)
+            node1["if"].append((id,same_testbed))
+            node2["if"].append((id,same_testbed))
+            return id
+      print("ERROR END OF INTERFACES")
+      print(node1,node2)
+      exit(1)
 
    def setLinkLatCap(self, node1: int, node2:int, latency: int=None, capacity: int=None, packet_loss: str=None):
       links= self.spec["links"]
@@ -74,12 +91,11 @@ class Spec:
             if v1["testbed"] == v2["testbed"]:
                same_testbed = True
             id = self.create_id_link()
-            if1 = self.create_interface(nodes[n1],same_testbed)
-            if2 = self.create_interface(nodes[n2],same_testbed)
+            if_ = self.create_interface(nodes[n1],nodes[n2],same_testbed)
             link_type = "lan"
             if v1["testbed"] == TestBeds.CITY:
                link_type = "gre-tunnel"
-            links["link"+str(id)] = {"testbed": v1["testbed"], "interfaces":[n1+":"+if1,n2+":"+if2], "link_type": link_type, "same_testbed": same_testbed}
+            links["link"+str(id)] = {"testbed": v1["testbed"], "interfaces":[n1+":"+if_,n2+":"+if_], "link_type": link_type, "same_testbed": same_testbed}
 
 
    def create_nodes(self, num: int, testbed: TestBeds):
@@ -100,14 +116,20 @@ class Spec:
       x = 0
       y = 0
       for n,v in nodes.items():
-         text+= '<node client_id="%s" component_manager_id="%s">\n<sliver_type name="raw-pc">\n<disk_image name="%s"/>\n</sliver_type>\n'%(n,v["testbed"].value,v["image"].value)
+         text+= '<node client_id="%s" exclusive="true" component_manager_id="%s">\n<sliver_type name="raw-pc">\n<disk_image name="%s"/>\n</sliver_type>\n'%(n,v["testbed"].value,v["image"].value)
          text+= '<location xmlns="http://jfed.iminds.be/rspec/ext/jfed/1" x="%d" y="%d"/>\n'%(x,y)
          x+=10
          y+=10
          for (interface,same_testbed) in v["if"]:
             if same_testbed:
-               text+= '<interface client_id="%s:%s">\n<ip address="192.168.0.%d" netmask="255.255.255.0" type="ipv4"/>\n</interface>'%(n,interface, int(n[4:])+1)
-         text+= '</node>\n'
+               text+= '<interface client_id="%s:%s">\n<ip address="192.168.%d.%d" netmask="255.255.255.0" type="ipv4"/>\n</interface>'%(n,interface, int(interface[2:]),int(n[4:])+1)
+         text+= '<services>\n'
+         if v["testbed"] != TestBeds.CITY:
+            for s in enable_nat:
+               text+= f'<execute shell="sh" command="{s}"/>\n'
+         for s in docker:
+            text+= f'<execute shell="sh" command="{s}"/>\n'
+         text+= '</services>\n</node>\n'
       for l,v in links.items():
          if v["same_testbed"]:
             text+= '<link client_id="%s">\n<component_manager name="%s"/>\n'%(l,v["testbed"].value)
@@ -123,7 +145,7 @@ class Spec:
                      if "capacity" in v:
                         text+= ' capacity="%d"'%v["capacity"]
                      if "latency" in v:
-                        text+= ' latency="%d"'%v["latency"]
+                        text+= ' latency="%d"'%(v["latency"]/2)
                      if "packet_loss" in v:
                         text+= ' packet_loss="%s"'%v["packet_loss"]
                      text+= '/>\n'
@@ -134,9 +156,9 @@ class Spec:
 
 spec = Spec()
 
-spec.create_nodes(2, TestBeds.WALL1)
-spec.create_nodes(3, TestBeds.WALL2)
-spec.create_nodes(3, TestBeds.CITY)
+#spec.create_nodes(2, TestBeds.WALL1)
+spec.create_nodes(4, TestBeds.WALL2)
+#spec.create_nodes(3, TestBeds.CITY)
 
 spec.create_links()
 
