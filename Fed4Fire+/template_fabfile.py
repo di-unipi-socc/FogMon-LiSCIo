@@ -75,16 +75,18 @@ def setupNetwork(ctx):
                 n2 = v["interfaces"][1].split(":")[0]
                 found = False
                 if n2 == conn.original_host:
-                    grename = f"gre{n1}"
+                    othername = n1
+                    grename = f"gre{othername}"
                     myipv6 = spec["nodes"][n2]["ipv6"]
-                    otheripv6 = spec["nodes"][n1]["ipv6"]
+                    otheripv6 = spec["nodes"][othername]["ipv6"]
                     myip = v["ips"][1]
                     otherip = v["ips"][0]
                     found = True
                 if n1 == conn.original_host:
-                    grename = f"gre{n2}"
+                    othername = n2
+                    grename = f"gre{othername}"
                     myipv6 = spec["nodes"][n1]["ipv6"]
-                    otheripv6 = spec["nodes"][n2]["ipv6"]
+                    otheripv6 = spec["nodes"][othername]["ipv6"]
                     myip = v["ips"][0]
                     otherip = v["ips"][1]
                     found = True
@@ -92,6 +94,7 @@ def setupNetwork(ctx):
                     conn.run(f"sudo ip -6 link add name {grename} type ip6gre local {myipv6} remote {otheripv6} ttl 64")
                     conn.run(f"sudo ip link set up dev {grename}")
                     conn.run(f"sudo ip addr add {myip} peer {otherip} dev {grename}")
+                    conn.run(f'sudo bash -c \'echo "{otherip}\t{othername}" >> /etc/hosts\'')
                     if "capacity" in v or "latency" in v or "packet_loss" in v:
                         command = f"sudo tc qdisc add dev {grename} root netem "
                         if "latency" in v:
@@ -117,13 +120,16 @@ def removeNetwork(ctx):
             found = False
             if n2 == conn.original_host:
                 grename = f"gre{n1}"
+                otherip = v["ips"][0]
                 found = True
             if n1 == conn.original_host:
                 grename = f"gre{n2}"
+                otherip = v["ips"][1]
                 found = True
             if found:
                 try:
                     conn.run(f"sudo ip -6 link del dev {grename}")
+                    conn.sudo(f"sed -i '/{otherip}/d' /etc/hosts")
                 except:
                     pass
 
