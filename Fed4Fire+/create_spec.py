@@ -1,17 +1,5 @@
 #!/usr/bin/env python3
-from enum import Enum
-from xml.dom import minidom
-import xml.etree.ElementTree as ET
-
-class TestBeds(str, Enum):
-   WALL1 = "urn:publicid:IDN+wall1.ilabt.iminds.be+authority+cm"
-   WALL2 = "urn:publicid:IDN+wall2.ilabt.iminds.be+authority+cm"
-   CITY = "urn:publicid:IDN+lab.cityofthings.eu+authority+cm"
-
-class Ubuntu(str, Enum):
-   WALL1 = "urn:publicid:IDN+wall1.ilabt.iminds.be+image+emulab-ops:UBUNTU18-64-STD"
-   WALL2 = "urn:publicid:IDN+wall1.ilabt.iminds.be+image+emulab-ops:UBUNTU18-64-STD"
-   CITY = "urn:publicid:IDN+lab.cityofthings.eu+image+emulab-ops:UBUNTU18-64-CoT-armgcc"
+from .template_fabfile import TestBeds, Ubuntu
 
 class Spec:
 
@@ -33,29 +21,21 @@ class Spec:
       self._id_link_+=1
       return ret
 
-   def create_interface(self, node1, node2, same_testbed):
-      new = 0
-      arr = [int(interface[2:]) for (interface,same) in node1["if"]]+[int(interface[2:]) for (interface,same) in node2["if"]]
-      arr.sort()
-      for new in range(255):
-         if new not in arr:
-            id = "if"+str(new)
-            node1["if"].append((id,same_testbed))
-            node2["if"].append((id,same_testbed))
-            return id
-      print("ERROR END OF INTERFACES")
-      print(node1,node2)
-      exit(1)
+   _id_if_ = 0
+   def create_id_if(self):
+      ret = self._id_if_
+      self._id_if_+=1
+      return ret
 
-   def setLinkLatCap(self, node1: int, node2:int, latency: int=None, capacity: int=None, packet_loss: str=None):
+   def setLinkLatCap(self, node1: int, node2:int, latency: int=0, capacity: int=0, packet_loss: str=None):
       links= self.spec["links"]
       for l,v in links.items():
          n1 = v["interfaces"][0].split(":")[0]
          n2 = v["interfaces"][1].split(":")[0]
-         if (n1 == "node"+str(node1) and n2 == "node"+str(node2)) or (n2 == "node"+str(node1) and n1 == "node"+str(node2)):
-            if latency is not None:
+         if (n1 == "node"+str(node1) and n2 == "node"+str(node2)):
+            if latency != 0:
                v["latency"] = latency
-            if capacity is not None:
+            if capacity != 0:
                v["capacity"] = capacity
             if packet_loss is not None:
                v["packet_loss"] = packet_loss
@@ -75,11 +55,11 @@ class Spec:
             if v1["testbed"] == v2["testbed"]:
                same_testbed = True
             id = self.create_id_link()
-            if_ = self.create_interface(nodes[n1],nodes[n2],same_testbed)
+            if_ = "if"+str(self.create_id_if())
             link_type = "lan"
             if v1["testbed"] == TestBeds.CITY:
                link_type = "gre-tunnel"
-            links["link"+str(id)] = {"testbed": v1["testbed"], "interfaces":[n1+":"+if_,n2+":"+if_], "link_type": link_type, "same_testbed": same_testbed}
+            links["link"+str(id)] = {"testbed": v1["testbed"], "interfaces":[n1+":"+if_,n2+":"+if_], "link_type": link_type, "same_testbed": same_testbed, "ips": ["10.%d.%d.%d"%(int(if_[2:])//256, int(if_[2:])%256,int(n1[4:])+1),"10.%d.%d.%d"%(int(if_[2:])//256, int(if_[2:])%256,int(n2[4:])+1)]}
 
 
    def create_nodes(self, num: int, testbed: TestBeds):
@@ -105,9 +85,9 @@ class Spec:
          x+=10
          y+=10
          for (interface,same_testbed) in v["if"]:
-            if same_testbed:
-               text+= '<interface client_id="%s:%s"/>'%(n,interface)
-               # text+= '<interface client_id="%s:%s">\n<ip address="192.168.%d.%d" netmask="255.255.255.0" type="ipv4"/>\n</interface>'%(n,interface, int(interface[2:]),int(n[4:])+1)
+            if same_testbed and v["testbed"] != TestBeds.CITY:
+               text+= '<interface client_id="%s:%s">\n'%(n,interface)
+               text+= '<ip address="10.%d.%d.%d" netmask="255.0.0.0" type="ipv4"/>\n</interface>'%(int(interface[2:])//256, int(interface[2:])%256,int(n[4:])+1)
          # text+= '<services>\n'
          # if v["testbed"] != TestBeds.CITY:
          #    for s in enable_nat:
@@ -117,12 +97,13 @@ class Spec:
          # text+= '</services>\n
          text+= '</node>\n'
       for l,v in links.items():
-         if v["same_testbed"]:
-            text+= '<link client_id="%s">\n<component_manager name="%s"/>\n'%(l,v["testbed"].value)
-            for interface in v["interfaces"]:
-               text+= '<interface_ref client_id="%s"/>\n'%interface
-            text+= '<link_type name="%s"/>\n'%v["link_type"]
-            if v["testbed"] != TestBeds.CITY:
+         if v["testbed"] != TestBeds.CITY:
+            if v["same_testbed"]:
+               text+= '<link client_id="%s">\n<component_manager name="%s"/>\n'%(l,v["testbed"].value)
+               for interface in v["interfaces"]:
+                  text+= '<interface_ref client_id="%s"/>\n'%interface
+               text+= '<link_type name="%s"/>\n'%v["link_type"]
+               
                for interface1 in v["interfaces"]:
                   for interface2 in v["interfaces"]:
                      if not("capacity" in v or "latency" in v or "packet_loss" in v) or interface1 == interface2:
@@ -135,20 +116,33 @@ class Spec:
                      if "packet_loss" in v:
                         text+= ' packet_loss="%s"'%v["packet_loss"]
                      text+= '/>\n'
-            text+= '</link>'
+               text+= '</link>'
       text+=self.end
       return text
 
+# the first matrix must be symmetric the other represet the upload of every node against another
+matrix = [
+   ([0,10,10], [0,0,0],  TestBeds.WALL2),
+   ([10,0,4],  [100,0,100],  TestBeds.CITY),
+   ([10,4,0],  [100,100,0],  TestBeds.CITY),
+]
 
 spec = Spec()
 
-#spec.create_nodes(2, TestBeds.WALL1)
-spec.create_nodes(2, TestBeds.WALL2)
-#spec.create_nodes(3, TestBeds.CITY)
+# spec.create_nodes(2, TestBeds.WALL1)
+# spec.create_nodes(1, TestBeds.WALL2)
+# spec.create_nodes(2, TestBeds.CITY)
+
+for row in matrix:
+   spec.create_nodes(1, row[2])
 
 spec.create_links()
 
-spec.setLinkLatCap(0,1,10,100)
+for i in range(len(matrix)):
+   for j in range(len(matrix)):
+      if i == j:
+         continue
+      spec.setLinkLatCap(i,j,matrix[i][0][j],matrix[i][1][j])
 
 
 print(spec.print_spec())

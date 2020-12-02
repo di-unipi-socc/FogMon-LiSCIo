@@ -1,6 +1,20 @@
 from fabric import Connection, Config
 from fabric import task, SerialGroup
-import os
+from enum import Enum
+import json
+
+class TestBeds(str, Enum):
+   WALL1 = "urn:publicid:IDN+wall1.ilabt.iminds.be+authority+cm"
+   WALL2 = "urn:publicid:IDN+wall2.ilabt.iminds.be+authority+cm"
+   CITY = "urn:publicid:IDN+lab.cityofthings.eu+authority+cm"
+
+class Ubuntu(str, Enum):
+   WALL1 = "urn:publicid:IDN+wall1.ilabt.iminds.be+image+emulab-ops:UBUNTU18-64-STD"
+   WALL2 = "urn:publicid:IDN+wall1.ilabt.iminds.be+image+emulab-ops:UBUNTU18-64-STD"
+   CITY = "urn:publicid:IDN+lab.cityofthings.eu+image+emulab-ops:UBUNTU18-64-CoT-armgcc"
+
+with open("spec.json", 'r') as rd:
+   spec = json.load(rd)
 
 user = "marcog"
 
@@ -26,11 +40,22 @@ def staging(ctx):
                 'load_ssh_configs': True,
             }
         )
-        conns = SerialGroup(*["node0","node1"],
+        nodes = [n for (n,v) in spec["nodes"].items()]
+        conns = SerialGroup(*nodes,
             config = config)
         ctx.CONNS = conns
     if "CONNS" not in ctx:
         print("still")
+
+def getIpv6s(ctx):
+    # resolve ips
+    for conn in ctx.CONNS:
+        out = conn.run("hostname -I")
+        try:
+            ipv6 = out.stdout.split(" ")[1]
+            spec["nodes"][conn.original_host]["ipv6"] = ipv6
+        except:
+            exit(1)
 
 @task
 def pingtest(ctx):
@@ -39,7 +64,71 @@ def pingtest(ctx):
         conn.run('ping -c 3 8.8.8.8')
 
 @task
-def setup(ctx):
+def setupNetwork(ctx):
+    staging(ctx)
+    getIpv6s(ctx)
+    for conn in ctx.CONNS:
+        print(spec["nodes"][conn.original_host])
+        for l,v in spec["links"].items():
+            if not v["same_testbed"] or v["testbed"] == TestBeds.CITY.value:
+                n1 = v["interfaces"][0].split(":")[0]
+                n2 = v["interfaces"][1].split(":")[0]
+                found = False
+                if n2 == conn.original_host:
+                    grename = f"gre{n1}"
+                    myipv6 = spec["nodes"][n2]["ipv6"]
+                    otheripv6 = spec["nodes"][n1]["ipv6"]
+                    myip = v["ips"][1]
+                    otherip = v["ips"][0]
+                    found = True
+                if n1 == conn.original_host:
+                    grename = f"gre{n2}"
+                    myipv6 = spec["nodes"][n1]["ipv6"]
+                    otheripv6 = spec["nodes"][n2]["ipv6"]
+                    myip = v["ips"][0]
+                    otherip = v["ips"][1]
+                    found = True
+                if found:
+                    conn.run(f"sudo ip -6 link add name {grename} type ip6gre local {myipv6} remote {otheripv6} ttl 64")
+                    conn.run(f"sudo ip link set up dev {grename}")
+                    conn.run(f"sudo ip addr add {myip} peer {otherip} dev {grename}")
+                    if "capacity" in v or "latency" in v or "packet_loss" in v:
+                        command = f"sudo tc qdisc add dev {grename} root netem "
+                        if "latency" in v:
+                            latency = v["latency"]*1000/2
+                            command+= f"delay {latency} "
+                        if "capacity" in v:
+                            capacity = v["capacity"]*1000
+                            command+= f"rate {capacity}mbit "
+                        if "packet_loss" in v:
+                            packet_loss = v["packet_loss"]
+                            command+= f"loss random {packet_loss}% "
+                        conn.run(command)
+                        print(command)
+        
+@task
+def removeNetwork(ctx):
+    staging(ctx)
+    for conn in ctx.CONNS:
+        print(spec["nodes"][conn.original_host])
+        for l,v in spec["links"].items():
+            n1 = v["interfaces"][0].split(":")[0]
+            n2 = v["interfaces"][1].split(":")[0]
+            found = False
+            if n2 == conn.original_host:
+                grename = f"gre{n1}"
+                found = True
+            if n1 == conn.original_host:
+                grename = f"gre{n2}"
+                found = True
+            if found:
+                try:
+                    conn.run(f"sudo ip -6 link del dev {grename}")
+                except:
+                    pass
+
+@task
+def setupDocker(ctx):
     staging(ctx)
     for conn in ctx.CONNS:
         for comm in enable_nat:
