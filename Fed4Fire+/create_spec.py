@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-from .template_fabfile import TestBeds, Ubuntu
+from template_fabfile import TestBeds, Ubuntu
 
 class Spec:
 
