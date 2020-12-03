@@ -70,8 +70,8 @@ def setupNetwork(ctx):
     getIpv6s(ctx)
     for conn in ctx.CONNS:
         print(spec["nodes"][conn.original_host])
-        conn.sudo(f"sed -i '/{otherip}/d' /etc/hosts")
-        conn.run(f'sudo bash -c \'echo "{otherip}\t{othername}" >> /etc/hosts\'')
+        conn.sudo(f"sed -i '/127.0.0.1\t{conn.original_host}/d' /etc/hosts")
+        conn.run(f'sudo bash -c \'echo "127.0.0.1\t{conn.original_host}" >> /etc/hosts\'')
         for l,v in spec["links"].items():
             if not v["same_testbed"] or v["testbed"] == TestBeds.CITY.value:
                 n1 = v["interfaces"][0].split(":")[0]
@@ -118,6 +118,7 @@ def removeNetwork(ctx):
     staging(ctx)
     for conn in ctx.CONNS:
         print(spec["nodes"][conn.original_host])
+        conn.sudo(f"sed -i '/127.0.0.1\t{conn.original_host}/d' /etc/hosts")
         for l,v in spec["links"].items():
             n1 = v["interfaces"][0].split(":")[0]
             n2 = v["interfaces"][1].split(":")[0]
@@ -136,6 +137,7 @@ def removeNetwork(ctx):
                     conn.sudo(f"sed -i '/{otherip}/d' /etc/hosts")
                 except:
                     pass
+
 @task
 def setupDocker(ctx):
     staging(ctx)
