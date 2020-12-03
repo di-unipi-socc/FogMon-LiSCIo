@@ -56,6 +56,8 @@ class Spec:
                same_testbed = True
             id = self.create_id_link()
             if_ = "if"+str(self.create_id_if())
+            nodes[n1]["if"].append((if_,same_testbed))
+            nodes[n2]["if"].append((if_,same_testbed))
             link_type = "lan"
             if v1["testbed"] == TestBeds.CITY:
                link_type = "gre-tunnel"
@@ -85,6 +87,7 @@ class Spec:
          x+=10
          y+=10
          for (interface,same_testbed) in v["if"]:
+            print(same_testbed,v["testbed"])
             if same_testbed and v["testbed"] != TestBeds.CITY:
                text+= '<interface client_id="%s:%s">\n'%(n,interface)
                text+= '<ip address="10.%d.%d.%d" netmask="255.255.255.0" type="ipv4"/>\n</interface>'%(int(interface[2:])//256, int(interface[2:])%256,int(n[4:])+1)

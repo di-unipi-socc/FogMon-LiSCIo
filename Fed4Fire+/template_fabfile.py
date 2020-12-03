@@ -21,16 +21,17 @@ user = "marcog"
 enable_nat = ["wget -O - -nv https://www.wall2.ilabt.iminds.be/enable-nat.sh | sudo bash"]
 
 docker = [
-   "sudo apt -y update",
-   "sudo DEBIAN_FRONTEND=noninteractive apt -y install apt-transport-https ca-certificates curl gnupg-agent software-properties-common",
-   "sudo apt remove docker docker-engine docker.io containerd runc",
+   "sudo apt-get -y update",
+   "sudo DEBIAN_FRONTEND=noninteractive apt-get -y install apt-transport-https ca-certificates curl gnupg-agent software-properties-common",
+   "sudo apt-get remove docker docker-engine docker.io containerd runc",
    "curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add -",
    'sudo add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable"',
-   "sudo apt update",
-   "sudo apt install -y docker-ce docker-ce-cli containerd.io",
+   "sudo apt-get update",
+   "sudo apt-get install -y docker-ce docker-ce-cli containerd.io",
    f"sudo usermod -aG docker {user}",
-   "newgrp docker"
+   #"newgrp docker"
 ]
+
 
 def staging(ctx):
     if "CONNS" not in ctx:
@@ -52,7 +53,7 @@ def getIpv6s(ctx):
     for conn in ctx.CONNS:
         out = conn.run("hostname -I")
         try:
-            ipv6 = out.stdout.split(" ")[1]
+            ipv6 = out.stdout.split(" ")[-2]
             spec["nodes"][conn.original_host]["ipv6"] = ipv6
         except:
             exit(1)
@@ -69,6 +70,8 @@ def setupNetwork(ctx):
     getIpv6s(ctx)
     for conn in ctx.CONNS:
         print(spec["nodes"][conn.original_host])
+        conn.sudo(f"sed -i '/{otherip}/d' /etc/hosts")
+        conn.run(f'sudo bash -c \'echo "{otherip}\t{othername}" >> /etc/hosts\'')
         for l,v in spec["links"].items():
             if not v["same_testbed"] or v["testbed"] == TestBeds.CITY.value:
                 n1 = v["interfaces"][0].split(":")[0]
@@ -94,6 +97,7 @@ def setupNetwork(ctx):
                     conn.run(f"sudo ip -6 link add name {grename} type ip6gre local {myipv6} remote {otheripv6} ttl 64")
                     conn.run(f"sudo ip link set up dev {grename}")
                     conn.run(f"sudo ip addr add {myip} peer {otherip} dev {grename}")
+                    conn.sudo(f"sed -i '/{otherip}/d' /etc/hosts")
                     conn.run(f'sudo bash -c \'echo "{otherip}\t{othername}" >> /etc/hosts\'')
                     if "capacity" in v or "latency" in v or "packet_loss" in v:
                         command = f"sudo tc qdisc add dev {grename} root netem "
@@ -130,15 +134,16 @@ def removeNetwork(ctx):
                 try:
                     conn.run(f"sudo ip -6 link del dev {grename}")
                     conn.sudo(f"sed -i '/{otherip}/d' /etc/hosts")
-                except:
-                    pass
 
 @task
 def setupDocker(ctx):
     staging(ctx)
     for conn in ctx.CONNS:
-        for comm in enable_nat:
-            conn.run(comm)
-        for comm in docker:
-            print(comm)
-            conn.run(comm)
+        for n,v in spec["nodes"].items():
+            if n == conn.original_host:
+                if v["testbed"] != TestBeds.CITY.value:
+                    for comm in enable_nat:
+                        conn.run(comm)
+                for comm in docker:
+                    print(comm)
+                    conn.run(comm)
