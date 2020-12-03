@@ -87,7 +87,7 @@ class Spec:
          for (interface,same_testbed) in v["if"]:
             if same_testbed and v["testbed"] != TestBeds.CITY:
                text+= '<interface client_id="%s:%s">\n'%(n,interface)
-               text+= '<ip address="10.%d.%d.%d" netmask="255.0.0.0" type="ipv4"/>\n</interface>'%(int(interface[2:])//256, int(interface[2:])%256,int(n[4:])+1)
+               text+= '<ip address="10.%d.%d.%d" netmask="255.255.255.0" type="ipv4"/>\n</interface>'%(int(interface[2:])//256, int(interface[2:])%256,int(n[4:])+1)
          # text+= '<services>\n'
          # if v["testbed"] != TestBeds.CITY:
          #    for s in enable_nat:
@@ -122,9 +122,10 @@ class Spec:
 
 # the first matrix must be symmetric the other represet the upload of every node against another
 matrix = [
-   ([0,10,10], [0,0,0],  TestBeds.WALL2),
-   ([10,0,4],  [100,0,100],  TestBeds.CITY),
-   ([10,4,0],  [100,100,0],  TestBeds.CITY),
+   ([0,4,10,10],  [0,  0,0  ,0],  TestBeds.WALL2),
+   ([4,0,10,10],  [0,  0,0  ,0],  TestBeds.WALL2),
+   ([10,10,0,4],  [100,0,0,100],  TestBeds.CITY),
+   ([10,10,4,0],  [100,0,100,0],  TestBeds.CITY),
 ]
 
 spec = Spec()
