@@ -134,7 +134,8 @@ def removeNetwork(ctx):
                 try:
                     conn.run(f"sudo ip -6 link del dev {grename}")
                     conn.sudo(f"sed -i '/{otherip}/d' /etc/hosts")
-
+                except:
+                    pass
 @task
 def setupDocker(ctx):
     staging(ctx)
