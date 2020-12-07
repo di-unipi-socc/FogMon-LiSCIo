@@ -21,15 +21,18 @@ user = "marcog"
 enable_nat = ["wget -O - -nv https://www.wall2.ilabt.iminds.be/enable-nat.sh | sudo bash"]
 
 docker = [
-   "sudo apt-get -y update",
-   "sudo DEBIAN_FRONTEND=noninteractive apt-get -y install apt-transport-https ca-certificates curl gnupg-agent software-properties-common",
-   "sudo apt-get remove docker docker-engine docker.io containerd runc",
-   "curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add -",
-   'sudo add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable"',
-   "sudo apt-get update",
-   "sudo apt-get install -y docker-ce docker-ce-cli containerd.io",
-   f"sudo usermod -aG docker {user}",
-   #"newgrp docker"
+    'sudo service ntp stop',
+    'sudo ntpdate pool.ntp.org',
+    "sudo apt-get -y update",
+    "sudo DEBIAN_FRONTEND=noninteractive apt-get -y install apt-transport-https ca-certificates curl gnupg-agent software-properties-common",
+    "sudo apt-get remove docker docker-engine docker.io containerd runc",
+    "curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add -",
+    'sudo add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable"',
+    "sudo apt-get update",
+    "sudo apt-get install -y docker-ce docker-ce-cli containerd.io",
+    f"sudo usermod -aG docker {user}",
+    #"newgrp docker"
+    "sudo apt-get install screen"
 ]
 
 
@@ -72,6 +75,8 @@ def setupNetwork(ctx):
         print(spec["nodes"][conn.original_host])
         conn.sudo(f"sed -i '/127.0.0.1\t{conn.original_host}/d' /etc/hosts")
         conn.run(f'sudo bash -c \'echo "127.0.0.1\t{conn.original_host}" >> /etc/hosts\'')
+        if spec["nodes"][conn.original_host]["testbed"] == TestBeds.CITY.value:
+            conn.run("sudo sudo ip link set dev enp2s0 mtu 1400")
         for l,v in spec["links"].items():
             if not v["same_testbed"] or v["testbed"] == TestBeds.CITY.value:
                 n1 = v["interfaces"][0].split(":")[0]
@@ -97,16 +102,22 @@ def setupNetwork(ctx):
                     conn.run(f"sudo ip -6 link add name {grename} type ip6gre local {myipv6} remote {otheripv6} ttl 64")
                     conn.run(f"sudo ip link set up dev {grename}")
                     conn.run(f"sudo ip addr add {myip} peer {otherip} dev {grename}")
+                    conn.run(f"sudo sudo ip link set dev {grename} mtu 1400")
                     conn.sudo(f"sed -i '/{otherip}/d' /etc/hosts")
                     conn.run(f'sudo bash -c \'echo "{otherip}\t{othername}" >> /etc/hosts\'')
                     if "capacity" in v or "latency" in v or "packet_loss" in v:
                         command = f"sudo tc qdisc add dev {grename} root netem "
                         if "latency" in v:
-                            latency = v["latency"]*1000/2
-                            command+= f"delay {latency} "
+                            latency = v["latency"]
+                            if not v["same_testbed"]:
+                                latency -=3
+                            else:
+                                latency -=2
+                            latency = latency//2
+                            command+= f"delay {latency}ms "
                         if "capacity" in v:
-                            capacity = v["capacity"]*1000
-                            command+= f"rate {capacity}mbit "
+                            capacity = v["capacity"]
+                            command+= f"rate {capacity}kbit "
                         if "packet_loss" in v:
                             packet_loss = v["packet_loss"]
                             command+= f"loss random {packet_loss}% "
@@ -144,9 +155,24 @@ def setupDocker(ctx):
     for conn in ctx.CONNS:
         for n,v in spec["nodes"].items():
             if n == conn.original_host:
+                file = "/tmp/script621f37ffa.sh"
+                conn.run(f"> {file}")
+                print(f"created {file}")
+                conn.run(f"chmod +x {file}")
                 if v["testbed"] != TestBeds.CITY.value:
                     for comm in enable_nat:
-                        conn.run(comm)
+                        conn.run(f'echo \'{comm}\' >> {file}')
                 for comm in docker:
-                    print(comm)
-                    conn.run(comm)
+                    conn.run(f'echo \'{comm}\' >> {file}')
+                conn.run(f"screen -d -m -S docker bash -c '{file}'")
+
+@task
+def startFogmon(ctx):
+    staging(ctx)
+    leader = True
+    for conn in ctx.CONNS:
+        if leader:
+            conn.run("screen -d -m -S fogmon bash -c 'sudo docker run -it --net=host diunipisocc/liscio-fogmon --leader'")
+            leader = False
+        else:
+            conn.run("screen -d -m -S fogmon bash -c 'sudo docker run -it --net=host diunipisocc/liscio-fogmon -C node0'")

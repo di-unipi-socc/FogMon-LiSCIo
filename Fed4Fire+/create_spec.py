@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 from template_fabfile import TestBeds, Ubuntu
+import json
 
 class Spec:
 
@@ -28,11 +29,16 @@ class Spec:
       return ret
 
    def setLinkLatCap(self, node1: int, node2:int, latency: int=0, capacity: int=0, packet_loss: str=None):
+      """
+      To be called after create_links as no links are present before.
+      set the link informations:
+      latency, capacity, packet_loss
+      """
       links= self.spec["links"]
       for l,v in links.items():
          n1 = v["interfaces"][0].split(":")[0]
          n2 = v["interfaces"][1].split(":")[0]
-         if (n1 == "node"+str(node1) and n2 == "node"+str(node2)):
+         if (n1 == "node"+str(node1) and n2 == "node"+str(node2)) or (n2 == "node"+str(node1) and n1 == "node"+str(node2)):
             if latency != 0:
                v["latency"] = latency
             if capacity != 0:
@@ -40,8 +46,10 @@ class Spec:
             if packet_loss is not None:
                v["packet_loss"] = packet_loss
 
-
    def create_links(self):
+      """
+      To be called after the creation of the nodes to instantiate the links.
+      """
       nodes= self.spec["nodes"]
       links= self.spec["links"]
       for n1,v1 in nodes.items():
@@ -65,6 +73,9 @@ class Spec:
 
 
    def create_nodes(self, num: int, testbed: TestBeds):
+      """
+      create num nodes in the specified testbed.
+      """
       nodes= self.spec["nodes"]
       for i in range(num):
          id = self.create_id_node()
@@ -76,6 +87,9 @@ class Spec:
          nodes["node"+str(id)] = {"testbed": testbed, "image": image,"if": []}
 
    def print_spec(self):
+      """
+      return the spec in an xml format
+      """
       text = self.start
       nodes= self.spec["nodes"]
       links= self.spec["links"]
@@ -87,7 +101,6 @@ class Spec:
          x+=10
          y+=10
          for (interface,same_testbed) in v["if"]:
-            print(same_testbed,v["testbed"])
             if same_testbed and v["testbed"] != TestBeds.CITY:
                text+= '<interface client_id="%s:%s">\n'%(n,interface)
                text+= '<ip address="10.%d.%d.%d" netmask="255.255.255.0" type="ipv4"/>\n</interface>'%(int(interface[2:])//256, int(interface[2:])%256,int(n[4:])+1)
@@ -124,11 +137,12 @@ class Spec:
       return text
 
 # the first matrix must be symmetric the other represet the upload of every node against another
+# this example create 4 nodes, 2 from WALL2 and 2 from citylab
 matrix = [
-   ([0,4,10,10],  [0,  0,0  ,0],  TestBeds.WALL2),
-   ([4,0,10,10],  [0,  0,0  ,0],  TestBeds.WALL2),
-   ([10,10,0,4],  [100,0,0,100],  TestBeds.CITY),
-   ([10,10,4,0],  [100,0,100,0],  TestBeds.CITY),
+   ([0,4,10,10],  [0,  0,1000  ,1000],  TestBeds.WALL2),
+   ([4,0,10,10],  [0,  0,0  ,      0],  TestBeds.WALL2),
+   ([10,10,0,4],  [1000,0,0,    1000],  TestBeds.CITY),
+   ([10,10,4,0],  [1000,0,1000,    0],  TestBeds.CITY),
 ]
 
 spec = Spec()
@@ -137,20 +151,23 @@ spec = Spec()
 # spec.create_nodes(1, TestBeds.WALL2)
 # spec.create_nodes(2, TestBeds.CITY)
 
+# this take the matrix and create the nodes
 for row in matrix:
    spec.create_nodes(1, row[2])
 
+# instantiate the links
 spec.create_links()
 
+# set the link informations
 for i in range(len(matrix)):
    for j in range(len(matrix)):
       if i == j:
          continue
       spec.setLinkLatCap(i,j,matrix[i][0][j],matrix[i][1][j])
 
-
+# print the xml spec
 print(spec.print_spec())
-print("\n\n\n")
-import json
+
+# save the spec.json
 with open("spec.json","w") as wr:
    json.dump(spec.spec, wr)
