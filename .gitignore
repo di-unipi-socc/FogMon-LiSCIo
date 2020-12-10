@@ -12,3 +12,5 @@ tests/UnitTests
 build
 spec.json
 Fed4Fire+/*.zip
+__pycache__/
+*.pyc

@@ -13,9 +13,6 @@ class Ubuntu(str, Enum):
    WALL2 = "urn:publicid:IDN+wall1.ilabt.iminds.be+image+emulab-ops:UBUNTU18-64-STD"
    CITY = "urn:publicid:IDN+lab.cityofthings.eu+image+emulab-ops:UBUNTU18-64-CoT-armgcc"
 
-with open("spec.json", 'r') as rd:
-   spec = json.load(rd)
-
 user = "marcog"
 
 enable_nat = ["wget -O - -nv https://www.wall2.ilabt.iminds.be/enable-nat.sh | sudo bash"]
@@ -48,11 +45,13 @@ def staging(ctx):
         conns = SerialGroup(*nodes,
             config = config)
         ctx.CONNS = conns
-    if "CONNS" not in ctx:
-        print("still")
+    if "SPEC" not in ctx:
+        with open("spec.json", 'r') as rd:
+            ctx.SPEC = json.load(rd)
 
 def getIpv6s(ctx):
     # resolve ips
+    spec = ctx.SPEC
     for conn in ctx.CONNS:
         out = conn.run("hostname -I")
         try:
@@ -71,6 +70,7 @@ def pingtest(ctx):
 def setupNetwork(ctx):
     staging(ctx)
     getIpv6s(ctx)
+    spec = ctx.SPEC
     for conn in ctx.CONNS:
         print(spec["nodes"][conn.original_host])
         conn.sudo(f"sed -i '/127.0.0.1\t{conn.original_host}/d' /etc/hosts")
@@ -127,6 +127,7 @@ def setupNetwork(ctx):
 @task
 def removeNetwork(ctx):
     staging(ctx)
+    spec = ctx.SPEC
     for conn in ctx.CONNS:
         print(spec["nodes"][conn.original_host])
         conn.sudo(f"sed -i '/127.0.0.1\t{conn.original_host}/d' /etc/hosts")
@@ -152,6 +153,7 @@ def removeNetwork(ctx):
 @task
 def setupDocker(ctx):
     staging(ctx)
+    spec = ctx.SPEC
     for conn in ctx.CONNS:
         for n,v in spec["nodes"].items():
             if n == conn.original_host:

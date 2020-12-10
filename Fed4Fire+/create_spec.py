@@ -136,7 +136,7 @@ class Spec:
       text+=self.end
       return text
 
-# the first matrix must be symmetric the other represet the upload of every node against another
+# the first and second matrix must be symmetric the other represet the upload of every node against another
 # this example create 4 nodes, 2 from WALL2 and 2 from citylab
 matrix = [
    ([0,4,10,10],  [0,  0,1000  ,1000],  TestBeds.WALL2),
