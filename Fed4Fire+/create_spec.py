@@ -6,8 +6,8 @@ import json
 # the first and second matrix must be symmetric, the first represent the latency, the other represent the upload of every node against another
 # this example create 4 nodes, 2 from WALL2 and 2 from citylab
 matrix = [
-   ([0,4,10,10],  [0,  0,1000  ,1000],  TestBeds.WALL2),
-   ([4,0,10,10],  [0,  0,0  ,      0],  TestBeds.WALL2),
+   ([0,4,10,10],  [0,  0,1000  ,1000],  TestBeds.WALL1),
+   ([4,0,10,10],  [0,  0,0  ,      0],  TestBeds.WALL1),
    ([10,10,0,4],  [1000,0,0,    1000],  TestBeds.CITY),
    ([10,10,4,0],  [1000,0,1000,    0],  TestBeds.CITY),
 ]

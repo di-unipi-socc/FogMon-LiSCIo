@@ -30,10 +30,15 @@ docker = [
     f"sudo usermod -aG docker {user}",
     #"newgrp docker"
     "sudo apt-get install screen"
+    "sudo docker pull diunipisocc/liscio-fogmon"
 ]
 
 
 def staging(ctx):
+    if "SPEC" not in ctx:
+        with open("spec.json", 'r') as rd:
+            ctx.SPEC = json.load(rd)
+    spec = ctx.SPEC
     if "CONNS" not in ctx:
         config = Config(
             overrides={
@@ -45,9 +50,6 @@ def staging(ctx):
         conns = SerialGroup(*nodes,
             config = config)
         ctx.CONNS = conns
-    if "SPEC" not in ctx:
-        with open("spec.json", 'r') as rd:
-            ctx.SPEC = json.load(rd)
 
 def getIpv6s(ctx):
     # resolve ips
@@ -171,10 +173,10 @@ def setupDocker(ctx):
 @task
 def startFogmon(ctx):
     staging(ctx)
-    leader = True
+    leader = None
     for conn in ctx.CONNS:
-        if leader:
+        if leader is None:
             conn.run("screen -d -m -S fogmon bash -c 'sudo docker run -it --net=host diunipisocc/liscio-fogmon --leader'")
-            leader = False
+            leader = conn.original_host
         else:
-            conn.run("screen -d -m -S fogmon bash -c 'sudo docker run -it --net=host diunipisocc/liscio-fogmon -C node0'")
+            conn.run(f"screen -d -m -S fogmon bash -c 'sudo docker run -it --net=host diunipisocc/liscio-fogmon -C {leader}'")
