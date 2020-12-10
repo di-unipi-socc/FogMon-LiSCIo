@@ -32,8 +32,9 @@ for i in range(len(matrix)):
          continue
       spec.setLinkLatCap(i,j,matrix[i][0][j],matrix[i][1][j])
 
-# print the xml spec
-print(spec.print_spec())
+# save the xml spec
+with open("spec.xml","w") as wr:
+   wr.write(spec.print_spec())
 
 # save the spec.json
 with open("spec.json","w") as wr:
