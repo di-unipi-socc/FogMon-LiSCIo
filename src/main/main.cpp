@@ -120,17 +120,20 @@ int main(int argc, char *argv[]) {
 
     int a = -1;
 
+    printf("send \"0\" to exit\n");
     do {
         switch(a) {
-            case 0:
+            case 1:
                 node.setParam("start-selection",1);
+            break;
+            case 0:
+                return 0;
             break;
             default:
             break;
         }
         scanf("%d",&a);
-    }while(a == 0);
-
-
+    }while(true);
+    printf("exiting as requested\n");
     return 0;
 }
