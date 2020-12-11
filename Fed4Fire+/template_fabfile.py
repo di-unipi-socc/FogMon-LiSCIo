@@ -17,6 +17,8 @@ user = "marcog"
 
 enable_nat = ["wget -O - -nv https://www.wall2.ilabt.iminds.be/enable-nat.sh | sudo bash"]
 
+image = "diunipisocc/liscio-fogmon:test"
+
 docker = [
     'sudo service ntp stop',
     'sudo ntpdate pool.ntp.org',
@@ -30,7 +32,7 @@ docker = [
     f"sudo usermod -aG docker {user}",
     #"newgrp docker"
     "sudo apt-get install screen"
-    "sudo docker pull diunipisocc/liscio-fogmon"
+    f"sudo docker pull {image}"
 ]
 
 
@@ -75,31 +77,32 @@ def setupNetwork(ctx):
     spec = ctx.SPEC
     for conn in ctx.CONNS:
         print(spec["nodes"][conn.original_host])
+        conn.sudo(f"sed -i -E 's/([a-z0-9-]+) ([a-zA-Z0-9-]+) ([a-zA-Z0-9-]+)$/\3 \1 \2/' /etc/hosts")
         conn.sudo(f"sed -i '/127.0.0.1\t{conn.original_host}/d' /etc/hosts")
         conn.run(f'sudo bash -c \'echo "127.0.0.1\t{conn.original_host}" >> /etc/hosts\'')
         if spec["nodes"][conn.original_host]["testbed"] == TestBeds.CITY.value:
             conn.run("sudo sudo ip link set dev enp2s0 mtu 1400")
         for l,v in spec["links"].items():
+            n1 = v["interfaces"][0].split(":")[0]
+            n2 = v["interfaces"][1].split(":")[0]
+            found = False
+            if n2 == conn.original_host:
+                othername = n1
+                grename = f"gre{othername}"
+                myipv6 = spec["nodes"][n2]["ipv6"]
+                otheripv6 = spec["nodes"][othername]["ipv6"]
+                myip = v["ips"][1]
+                otherip = v["ips"][0]
+                found = True
+            if n1 == conn.original_host:
+                othername = n2
+                grename = f"gre{othername}"
+                myipv6 = spec["nodes"][n1]["ipv6"]
+                otheripv6 = spec["nodes"][othername]["ipv6"]
+                myip = v["ips"][0]
+                otherip = v["ips"][1]
+                found = True
             if not v["same_testbed"] or v["testbed"] == TestBeds.CITY.value:
-                n1 = v["interfaces"][0].split(":")[0]
-                n2 = v["interfaces"][1].split(":")[0]
-                found = False
-                if n2 == conn.original_host:
-                    othername = n1
-                    grename = f"gre{othername}"
-                    myipv6 = spec["nodes"][n2]["ipv6"]
-                    otheripv6 = spec["nodes"][othername]["ipv6"]
-                    myip = v["ips"][1]
-                    otherip = v["ips"][0]
-                    found = True
-                if n1 == conn.original_host:
-                    othername = n2
-                    grename = f"gre{othername}"
-                    myipv6 = spec["nodes"][n1]["ipv6"]
-                    otheripv6 = spec["nodes"][othername]["ipv6"]
-                    myip = v["ips"][0]
-                    otherip = v["ips"][1]
-                    found = True
                 if found:
                     conn.run(f"sudo ip -6 link add name {grename} type ip6gre local {myipv6} remote {otheripv6} ttl 64")
                     conn.run(f"sudo ip link set up dev {grename}")
@@ -170,13 +173,21 @@ def setupDocker(ctx):
                     conn.run(f'echo \'{comm}\' >> {file}')
                 conn.run(f"screen -d -m -S docker bash -c '{file}'")
 
+
+@task
+def pullFogmon(ctx):
+    staging(ctx)
+    for conn in ctx.CONNS:
+        conn.run(f"screen -d -m -S fogmon bash -c 'sudo docker pull {image}'")
+
+
 @task
 def startFogmon(ctx):
     staging(ctx)
     leader = None
     for conn in ctx.CONNS:
         if leader is None:
-            conn.run("screen -d -m -S fogmon bash -c 'sudo docker run -it --net=host diunipisocc/liscio-fogmon --leader'")
+            conn.run(f"screen -d -m -S fogmon bash -c 'sudo docker run -it --net=host {image} --leader'")
             leader = conn.original_host
         else:
-            conn.run(f"screen -d -m -S fogmon bash -c 'sudo docker run -it --net=host diunipisocc/liscio-fogmon -C {leader}'")
+            conn.run(f"screen -d -m -S fogmon bash -c 'sudo docker run -it --net=host {image} -C {leader}'")
