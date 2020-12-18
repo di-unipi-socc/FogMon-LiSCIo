@@ -26,7 +26,7 @@ with open("template_fabfile.py","r") as rd:
       for line in rd.readlines():
          wr.write(line)
 
-os.system("chmod 600 build/id_rsa")
+os.system("chmod 400 build/id_rsa")
 
 with open("build/spec.json","w") as wr:
    json.dump(spec, wr)

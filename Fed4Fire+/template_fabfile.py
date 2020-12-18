@@ -35,6 +35,61 @@ docker = [
     f"sudo docker pull {image}"
 ]
 
+vbox = [
+    'sudo wget -q https://www.virtualbox.org/download/oracle_vbox_2016.asc -O- | sudo apt-key add -',
+    'echo "deb [arch=amd64] https://download.virtualbox.org/virtualbox/debian focal contrib" | sudo tee /etc/apt/sources.list.d/virtualbox.list',
+    'sudo apt update',
+    'sudo apt-get install --yes virtualbox',
+    f'sudo usermod -aG vboxusers {user}',
+    'echo virtualbox-ext-pack virtualbox-ext-pack/license select true | sudo debconf-set-selections',
+    'sudo apt install -y virtualbox-ext-pack',
+    'VBoxManage setproperty vrdeextpack "Oracle VM VirtualBox Extension Pack"',
+    f'sudo chown {user}:vboxusers /mnt -R',
+    'sudo apt install -y virtualbox-guest-additions-iso',
+    #'wget -O /mnt/ubuntu-18.04.5-live-server-amd64.iso https://releases.ubuntu.com/18.04.5/ubuntu-18.04.5-live-server-amd64.iso'
+    
+    #'wget -O /mnt/Ubuntu_18.04.7z https://sourceforge.net/projects/osboxes/files/v/vb/59-U-u-svr/18.04/18.04.3/S18.04.3VB-64bit.7z/download',
+    #'sudo apt install -y p7zip-full',
+    #'7z e /mnt/Ubuntu_18.04.7z -o/mnt',
+    #'rm /mnt/64bit -r',
+    #'mv "/mnt/Ubuntu Server 18.04.3 (64bit).vdi" /mnt/Ubuntu_18.04.vdi',
+]
+
+startvbox = [
+    'vboxmanage createvm --ostype Ubuntu_64 --basefolder "/mnt/virtualbox" --register --name "%s"',
+    #'cp /mnt/Ubuntu_18.04.vdi /mnt/virtualbox/%s/Ubuntu_18.04.vdi',
+    'vboxmanage modifyvm "%s" --memory 1024 --nic2 nat --vrde on --vrdeport 33890',
+    'vboxmanage modifyvm "%s" --nic1 bridged --bridgeadapter1 enp1s0f0',
+    'VBoxManage modifyvm  "%s" --natpf1 "guestssh,tcp,,2222,,22"',
+    'vboxmanage createhd --filename "/mnt/virtualbox/%s/%s.vmdk" --format VMDK --size 16384 --variant stream',
+    'vboxmanage storagectl "%s" --name "SATA" --add sata',
+    'vboxmanage storageattach "%s" --storagectl SATA --port 0 --type hdd --medium "/mnt/virtualbox/%s/%s.vdi"',
+    #'vboxmanage storageattach "%s" --storagectl SATA --port 0 --type hdd --medium "/mnt/virtualbox/%s/Ubuntu_18.04.vdi"',
+    #'vboxmanage storageattach "%s" --storagectl SATA --port 15 --type dvddrive --medium /usr/share/virtualbox/VBoxGuestAdditions.iso',
+    #'vboxmanage storageattach "%s" --storagectl SATA --port 15 --type dvddrive --medium /mnt/ubuntu-18.04.5-live-server-amd64.iso',
+    'vboxmanage startvm "%s" --type headless',
+    'VBoxManage controlvm "%s" poweroff',
+
+]
+# <emulab:blockstore name="bs1" size="60GB" mountpoint="/mnt" class="local"/>
+
+# rdesktop localhost:33890
+
+# sudo dhclient -r
+# sudo dhclient
+# sudo apt install openssh-server
+# sudo apt install -y build-essential gcc make perl dkms
+# sudo mount /dev/cdrom /mnt
+# sudo /mnt/VBoxLinuxAdditions.run
+# reboot
+
+# VBoxManage guestproperty get <vmname> "/VirtualBox/GuestInfo/Net/0/V4/IP"
+# vboxmanage clonehd file.vmdk clone.vmdk
+
+# everyboot
+# wget -O - -nv https://www.wall2.ilabt.iminds.be/enable-nat.sh | sudo bash
+
+
 
 def staging(ctx):
     if "SPEC" not in ctx:
@@ -77,9 +132,12 @@ def setupNetwork(ctx):
     spec = ctx.SPEC
     for conn in ctx.CONNS:
         print(spec["nodes"][conn.original_host])
-        conn.sudo(f"sed -i -E 's/([a-z0-9-]+) ([a-zA-Z0-9-]+) ([a-zA-Z0-9-]+)$/\3 \1 \2/' /etc/hosts")
+        conn.sudo(f"sed -i -E 's/([a-z0-9-]+) ([a-zA-Z0-9-]+) ([a-zA-Z0-9-]+)$/\\3 \\1 \\2/' /etc/hosts")
         conn.sudo(f"sed -i '/127.0.0.1\t{conn.original_host}/d' /etc/hosts")
         conn.run(f'sudo bash -c \'echo "127.0.0.1\t{conn.original_host}" >> /etc/hosts\'')
+        if spec["nodes"][conn.original_host]["testbed"] != TestBeds.CITY.value:
+            for comm in enable_nat:
+                conn.run(comm)
         if spec["nodes"][conn.original_host]["testbed"] == TestBeds.CITY.value:
             conn.run("sudo sudo ip link set dev enp2s0 mtu 1400")
         for l,v in spec["links"].items():
@@ -136,6 +194,7 @@ def removeNetwork(ctx):
     for conn in ctx.CONNS:
         print(spec["nodes"][conn.original_host])
         conn.sudo(f"sed -i '/127.0.0.1\t{conn.original_host}/d' /etc/hosts")
+        conn.sudo(f"sed -i -E 's/([a-z0-9-]+) ([a-zA-Z0-9-]+) ([a-zA-Z0-9-]+)$/\\3 \\1 \\2/' /etc/hosts")
         for l,v in spec["links"].items():
             n1 = v["interfaces"][0].split(":")[0]
             n2 = v["interfaces"][1].split(":")[0]
@@ -166,13 +225,24 @@ def setupDocker(ctx):
                 conn.run(f"> {file}")
                 print(f"created {file}")
                 conn.run(f"chmod +x {file}")
-                if v["testbed"] != TestBeds.CITY.value:
-                    for comm in enable_nat:
-                        conn.run(f'echo \'{comm}\' >> {file}')
                 for comm in docker:
                     conn.run(f'echo \'{comm}\' >> {file}')
                 conn.run(f"screen -d -m -S docker bash -c '{file}'")
 
+@task
+def setupVbox(ctx):
+    staging(ctx)
+    spec = ctx.SPEC
+    for conn in ctx.CONNS:
+        for n,v in spec["nodes"].items():
+            if n == conn.original_host:
+                file = "/tmp/script6df5dfa.sh"
+                conn.run(f"> {file}")
+                print(f"created {file}")
+                conn.run(f"chmod +x {file}")
+                for comm in vbox:
+                    conn.run(f'echo \'{comm}\' >> {file}')
+                conn.run(f"screen -d -m -S vbox bash -c '{file}'")
 
 @task
 def pullFogmon(ctx):
