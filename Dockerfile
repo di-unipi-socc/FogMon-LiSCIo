@@ -7,14 +7,16 @@ RUN cat scripts/requirements.txt | xargs -n 1 -L 1 pip3 install
 
 ADD . /compile
 RUN cp -R ./scripts /
-RUN cmake .
-RUN make
-RUN cp ./FogMon /
-RUN cp ./libsqlitefunctions.so /
 WORKDIR /compile/assolo-0.9a
 RUN ./configure
 RUN make
 RUN cp $(ls ./Bin/*/*) /
+
+WORKDIR /compile
+RUN cmake .
+RUN make
+RUN cp ./FogMon /
+RUN cp ./libsqlitefunctions.so /
 WORKDIR /
 
 RUN rm -Rf /compile
