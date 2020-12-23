@@ -588,7 +588,7 @@ void Follower::timer() {
         }
 
         //every leaderCheck iterations update the MNodes
-        if(iter% this->node->leaderCheck == 9) {
+        if(iter% this->node->leaderCheck == this->node->leaderCheck-1) {
             vector<Message::node> res = this->connections->requestMNodes(this->nodeS);
             if(!res.empty()) {
                 for(int j=0; j<res.size(); j++)

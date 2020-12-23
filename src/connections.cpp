@@ -105,7 +105,7 @@ int Connections::readS(long fd, void *data, int len) {
 	int pos =0;
 	while(pos<len && (n = read(fd, &(((char*)data)[pos]), len-pos)) < len)
 	{
-        if(n < 0 && !(errno == EINTR || errno == EAGAIN || errno == EWOULDBLOCK))
+        if(n < 0 && !(errno == EINTR || errno == EAGAIN || errno == EWOULDBLOCK || errno == EINPROGRESS))
 		{
 			perror("send");
 			return -1;
@@ -126,7 +126,7 @@ int Connections::writeS(long fd, const char *data, int len) {
 	int pos =0;
 	while(pos < len && (n = write(fd, &(data[pos]), len-pos)) < len)
 	{
-		if(n < 0 && !(errno == EINTR || errno == EAGAIN || errno == EWOULDBLOCK))
+		if(n < 0 && !(errno == EINTR || errno == EAGAIN || errno == EWOULDBLOCK || errno == EINPROGRESS))
 		{
 			perror("send");
 			return -1;

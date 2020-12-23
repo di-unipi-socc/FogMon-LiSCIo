@@ -73,6 +73,8 @@ startvbox = [
 ]
 # <emulab:blockstore name="bs1" size="60GB" mountpoint="/mnt" class="local"/>
 
+# <hardware_type name="pcgen06"/>
+
 # rdesktop localhost:33890
 
 # sudo dhclient -r

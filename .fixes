@@ -1,2 +1,3 @@
 changed getSource function to use getnameinfo for name resolution instead of using the raw ip.
 changed exit condition for the program: 0 to exit.
+fixed recv and write for errno == EINPROGRESS.
