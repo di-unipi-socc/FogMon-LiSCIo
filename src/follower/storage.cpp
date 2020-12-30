@@ -79,7 +79,7 @@ Report::hardware_result Storage::getHardware() {
     char buf[1024];
     std::sprintf(buf,   "SELECT max(cores) as cores, avg(free_cpu) AS mean_free_cpu, variance(free_cpu) AS var_free_cpu, max(memory) as memory,"
                         "   avg(free_memory) AS mean_free_memory, variance(free_memory) AS var_free_memory, max(disk) as disk,"
-                        "   avg(free_disk) AS mean_free_disk, variance(free_disk) AS var_free_disk FROM Hardware");
+                        "   avg(free_disk) AS mean_free_disk, variance(free_disk) AS var_free_disk, strftime('%%s','now') as lasttime  FROM Hardware");
 
     Report::hardware_result r;
     memset(&r,0,sizeof(Report::hardware_result));

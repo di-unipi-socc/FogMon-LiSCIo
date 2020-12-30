@@ -7,6 +7,7 @@
 #include <time.h>
 #include <unistd.h>
 #include <string>
+#include <math.h>
 
 #include "rapidjson/document.h"
 #include "rapidjson/reader.h"
@@ -142,16 +143,17 @@ void Leader::timerFun() {
             i++;
         }
 
+        if(iter % 10 == 0) { // every n cycles check what to delete
+            this->getStorage()->removeOldLNodes(this->node->timePropagation*(log2(ips.size())+2)); // remove old leaders that do not update in a logarithmic time
+            this->getStorage()->removeOldNodes(this->node->timeheartbeat*3); // remove followers that do not update in 3 heartbeat time
+        }
+        
         if(iter % 5 == 0) {
             this->getStorage()->complete();
 
             this->selector.checkSelection();
         }
 
-        if(iter % 10 == 0) {
-            this->getStorage()->removeOldNodes(this->node->timeheartbeat*3);
-        }
-        
         iter++;
         sleeper.sleepFor(chrono::seconds(this->node->timePropagation));
     }
@@ -195,8 +197,15 @@ Message::node Leader::getMyNode() {
 void Leader::changeRole(vector<Message::node> leaders) {
     bool present = false;
     for(auto node : leaders) {
-        if(node == this->getMyNode()) {
+        if(node.id == this->getMyNode().id) {
             present = true;
+        }
+    }
+    printf("Change role: %d\n",!present);
+    if(!present){
+        printf("here: %s %s %s\n",this->getMyNode().id.c_str(), this->getMyNode().ip.c_str(), this->getMyNode().port.c_str());
+        for(auto node : leaders) {
+            printf("      %s %s %s\n",node.id.c_str(), node.ip.c_str(), node.port.c_str());
         }
     }
     if(!present) {
@@ -207,20 +216,11 @@ void Leader::changeRole(vector<Message::node> leaders) {
         
         sleeper.sleepFor(chrono::seconds(10));
 
-        for(auto node : leaders) {
-            if(!this->connections->sendMHello(node)) {
-                continue;
-            }
-        }
-        //communicate with the other
-        vector<Message::node> ips = this->storage->getMNodes();
-        for(auto ip : ips) {
+        for(auto ip : leaders) {
             if(ip.id == this->getMyNode().id)
                 continue;
             if(!this->connections->sendMHello(ip)) {
-                fprintf(stderr,"cannot connect to the network\n");
-                this->stop();
-                exit(1);
+                fprintf(stderr,"cannot connect to all the other leaders (%s)\n",ip.ip.c_str());
             }
         }
     }

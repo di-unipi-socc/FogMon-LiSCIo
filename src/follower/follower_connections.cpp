@@ -139,6 +139,7 @@ void FollowerConnections::handler(int fd, Message &m) {
                     if(node.ip == "::1" || node.ip == "127.0.0.1") {
                         node.ip = strIp;
                     }
+                    cout << node.ip << endl;
                 }
                 this->parent->changeRole(update.selected);
             }

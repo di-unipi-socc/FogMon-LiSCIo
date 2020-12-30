@@ -57,6 +57,8 @@ int IStorage::getHardwareCallback(void *R, int argc, char **argv, char **azColNa
             r->mean_free_disk = stoll(argv[i]);
         }else if(strcmp("var_free_disk", azColName[i])==0) {
             r->var_free_disk = stof(argv[i]);
+        }else if(strcmp("lasttime", azColName[i])==0) {
+            r->lasttime = stoll(argv[i]);
         }
     }
     return 0;
@@ -91,6 +93,12 @@ int IStorage::VectorNodeCallback(void *vec, int argc, char **argv, char **azColN
     test.ip = string(argv[1]);
     test.port = string(argv[2]);
     v->push_back(test);
+    return 0;
+}
+
+int IStorage::VectorStringCallback(void *vec, int argc, char **argv, char **azColName) {
+    vector<string> *v = (vector<string>*)vec;
+    v->push_back(string(argv[0]));
     return 0;
 }
 

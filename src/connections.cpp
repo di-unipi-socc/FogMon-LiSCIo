@@ -137,18 +137,31 @@ int Connections::writeS(long fd, const char *data, int len) {
 	}
 	return 1;
 }
+#include <execinfo.h>
+void stacktrace() {
+  void *array[10];
+  size_t size;
+
+  // get void*'s for all entries on the stack
+  size = backtrace(array, 10);
+
+  // print out all the frames to stderr
+  backtrace_symbols_fd(array, size, STDERR_FILENO);
+}
 
 bool Connections::getMessage(int fd, Message &m) {
     if(fd < 0)
         return false;
 
     int error;
-    int32_t len;
+    int32_t len=0;
     bool ret = false;
     error = readS(fd, &len, sizeof(len));
     if (error < 0)
     {
         perror("   recv() failed at len");
+        cout << "len: "<<len << endl << " error: "<< error <<endl;
+        stacktrace();
     }else if(len > 0) {
         char * data;
         try {

@@ -8,11 +8,12 @@ Selector::Selector(ILeader *leader) {
     status = FREE;
     this->clusterProc = NULL;
     sleeper.start();
+    this->id = 0;
 }
 
 Selector::~Selector() {
     this->sleeper.stop();
-
+    const std::lock_guard<std::mutex> lock(this->selectionMutex);
 
     if(this->selectionThread.joinable())
         this->selectionThread.join();
@@ -26,17 +27,22 @@ Selector::~Selector() {
 }
 
 bool Selector::initSelection(int id) {
+    printf("init selection %d >? %d\n",id,this->id);
     const std::lock_guard<std::mutex> lock(this->selectionMutex);
     if(this->status == READY) {
         if(this->id >= id) {
             return false;
         }
+    }else if(this->status != FREE) {
+        return false;
     }
+    printf("init selection true\n");
     this->status = CHANGING;
     return true;
 }
 
 bool Selector::calcSelection(Message::node from, int id, bool &res) {
+    printf("calc selection\n");
     const std::lock_guard<std::mutex> lock(this->selectionMutex);
 
     if(this->status != CHANGING)
@@ -71,9 +77,10 @@ bool Selector::calcSelection(Message::node from, int id, bool &res) {
         if(!sel.empty()) {
             this->parent->getConnections()->sendSelection(sel,from);
         }
-
-        const std::lock_guard<std::mutex> lock(this->selectionMutex);
-        status = FREE;
+        {
+            const std::lock_guard<std::mutex> lock(this->selectionMutex);
+            status = FREE;
+        }
     });
 
     return true;
@@ -81,7 +88,7 @@ bool Selector::calcSelection(Message::node from, int id, bool &res) {
 
 bool Selector::updateSelection(Message::leader_update update) {
     const std::lock_guard<std::mutex> lock(this->selectionMutex);
-
+    printf("updating selection\n");
     if(this->status == STARTED) {
         this->updates.push_back(update);
         return true;
@@ -92,6 +99,7 @@ bool Selector::updateSelection(Message::leader_update update) {
 bool Selector::checkSelection(bool doit) {
 
     if(doit) {
+        printf("STARTING SELECTION (forced)\n");
         this->startSelection();
         return true;
     }
@@ -102,44 +110,46 @@ bool Selector::checkSelection(bool doit) {
     printf("[TESTING] Leaders number: %d\n[TESTING] Follower number: %d\n",nL,nF);
 
     if(sqrt(nF) >= nL+1) {
-        printf("STARTING SELECTION");
+        printf("STARTING SELECTION (not enough nodes)\n");
         this->startSelection();
         return true;
     }
     try {
-    //calculate with a script the update and set the id on it
-    const char *args[] = {"./scripts/quality.py",NULL};
-    ReadProc * proc = new ReadProc((char**)args);
+        //calculate with a script the update and set the id on it
+        const char *args[] = {"./scripts/quality.py",NULL};
+        ReadProc * proc = new ReadProc((char**)args);
 
-     {
-        std::lock_guard<std::mutex> lock(this->clusterMutex);
-        if(this->clusterProc) {
-            delete this->clusterProc;
+        {
+            std::lock_guard<std::mutex> lock(this->clusterMutex);
+            if(this->clusterProc) {
+                delete this->clusterProc;
+            }
+            this->clusterProc = proc;
         }
-        this->clusterProc = proc;
-    }
 
-    int res = proc->waitproc();
+        int res = proc->waitproc();
 
-    if(res != 0) {
-        return false;
-    }
+        if(res != 0) {
+            return false;
+        }
 
-    string output = proc->readoutput();
-    rapidjson::Document doc;
-    rapidjson::ParseResult ok = doc.Parse((const char*)output.c_str());
-    if(!ok)
-        return false;
-    
-    if( !doc.HasMember("quality") || !doc["quality"].IsDouble()) {
-        return false;
-    }
-    
-    float quality = (float)doc["quality"].GetDouble();
-
-    if(quality > 3)
-        this->startSelection();
-        return true;
+        string output = proc->readoutput();
+        rapidjson::Document doc;
+        rapidjson::ParseResult ok = doc.Parse((const char*)output.c_str());
+        if(!ok)
+            return false;
+        
+        if( !doc.HasMember("quality") || !doc["quality"].IsDouble()) {
+            return false;
+        }
+        
+        float quality = (float)doc["quality"].GetDouble();
+        printf("quality check (cost = %f)\n",quality);
+        if(quality > 3){
+            printf("STARTING SELECTION (bad quality)\n");
+            this->startSelection();
+            return true;
+        }
     }catch(...) {
         printf("Exception in quality test.\n");
     }
@@ -156,6 +166,7 @@ void Selector::stopSelection() {
         delete this->clusterProc;
     }
     this->clusterProc = NULL;
+    printf("stopped selection\n");
 }
 
 Message::leader_update Selector::selection(int id) {
@@ -212,6 +223,7 @@ void Selector::startSelection() {
         const std::lock_guard<std::mutex> lock(this->selectionMutex);
 
         if(status != FREE) {
+            printf("aborted selection\n");
             return;
         }
         this->id = random();
@@ -226,6 +238,7 @@ void Selector::startSelection() {
                 status = FREE;
             }
         }
+        printf("aborted selection\n");
         return;
     }
 
@@ -238,6 +251,7 @@ void Selector::startSelection() {
             }
         }
         this->parent->getConnections()->sendEndSelection(Message::leader_update(),false);
+        printf("aborted selection\n");
         return;
     }
 
@@ -246,62 +260,66 @@ void Selector::startSelection() {
 
         status = STARTED;
     }
-    printf("started selection\n");
-    if(this->selectionThread.joinable()) {
-        this->selectionThread.join();
-    }
-    //start thread here
-    this->selectionThread = thread([this]{
-        auto t1 = std::chrono::high_resolution_clock::now();
-        Message::leader_update sel = this->selection(this->id);
-
-        auto t2 = std::chrono::high_resolution_clock::now();
-
-        auto duration = std::chrono::duration_cast<std::chrono::seconds>( t2 - t1 ).count();
-        
-        int numLeaders = this->parent->getStorage()->getMNodes().size();
-
-        //wait remaining time
-        this->sleeper.sleepFor(chrono::seconds(10*numLeaders - duration));
-
-        for(auto update : this->updates) {
-            if(update.id != this->id) {
-                continue;
-            }
-            //select best
-            if(update.cost < sel.cost) {
-                sel = update;
-            }else if(update.cost == sel.cost && update.changes < sel.changes) {
-                sel = update;
-            }
+    {
+        const std::lock_guard<std::mutex> lock(this->selectionMutex);
+        printf("started selection\n");
+        if(this->selectionThread.joinable()) {
+            this->selectionThread.join();
         }
-        printf("selected (cost = %f, changes = %d):\n",sel.cost,sel.changes);
-        for(auto n : sel.selected) {
-            printf("%s  %s  %s\n",n.id.c_str(),n.ip.c_str(),n.port.c_str());
-        }
+        //start thread here
+        this->selectionThread = thread([this]{
+            auto t1 = std::chrono::high_resolution_clock::now();
+            Message::leader_update sel = this->selection(this->id);
 
-        auto nodes = this->parent->getStorage()->getAllNodes();
-        auto tmpS = sel.selected;
+            auto t2 = std::chrono::high_resolution_clock::now();
 
-        sel.selected.clear();
+            auto duration = std::chrono::duration_cast<std::chrono::seconds>( t2 - t1 ).count();
+            
+            int numLeaders = this->parent->getStorage()->getMNodes().size();
 
-        for(auto node : nodes) {
-            for(auto sele : tmpS) {
-                if(sele.id == node.id) {
-                    sel.selected.push_back(node);
-                    break;
+            //wait remaining time
+            this->sleeper.sleepFor(chrono::seconds(duration*10+5));
+
+            for(auto update : this->updates) {
+                if(update.id != this->id) {
+                    continue;
+                }
+                //select best
+                if(update.cost < sel.cost) {
+                    sel = update;
+                }else if(update.cost == sel.cost && update.changes < sel.changes) {
+                    sel = update;
                 }
             }
-        }
+            printf("selected (cost = %f, changes = %d):\n",sel.cost,sel.changes);
 
-        this->parent->getConnections()->sendEndSelection(sel,true);
+            auto nodes = this->parent->getStorage()->getAllNodes();
+            auto tmpS = sel.selected;
 
-        {
-            const std::lock_guard<std::mutex> lock(this->selectionMutex);
+            sel.selected.clear();
 
-            status = FREE;
-        }
+            for(auto node : nodes) {
+                for(auto sele : tmpS) {
+                    if(sele.id == node.id) {
+                        sel.selected.push_back(node);
+                        break;
+                    }
+                }
+            }
+            for(auto n : sel.selected) {
+                printf("%s  %s  %s\n",n.id.c_str(),n.ip.c_str(),n.port.c_str());
+            }
+            printf("ending selection\n");
+            this->parent->getConnections()->sendEndSelection(sel,true);
 
-        this->parent->changeRoles(sel);
-    });
+            {
+                const std::lock_guard<std::mutex> lock(this->selectionMutex);
+
+                status = FREE;
+            }
+            printf("preend selection\n");
+            this->parent->changeRoles(sel);
+            printf("ended selection\n");
+        });
+    }
 }

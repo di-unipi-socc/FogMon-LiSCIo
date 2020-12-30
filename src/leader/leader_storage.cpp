@@ -36,23 +36,30 @@ Message::node LeaderStorage::getNode() {
 
 std::string LeaderStorage::addNode(Message::node node, Report::hardware_result hardware, Message::node *monitored) {
     char *zErrMsg = 0;
-    
-    stringstream query;
-    query <<    "INSERT OR REPLACE INTO MNodes"
-                " (id, ip, port, cores, mean_free_cpu, var_free_cpu, memory, mean_free_memory, var_free_memory, disk, mean_free_disk, var_free_disk, lasttime, monitoredBy)"
-                " VALUES (\""<< node.id <<"\", \""<< node.ip <<"\", \""<< node.port <<"\", "<<
-                    hardware.cores <<", "<< hardware.mean_free_cpu <<", "<< hardware.var_free_cpu <<", "<<
-                    hardware.memory <<", "<< hardware.mean_free_memory <<", "<< hardware.var_free_memory <<", "<<
-                    hardware.disk <<", "<< hardware.mean_free_disk <<", "<< hardware.var_free_disk <<", DATETIME('now'),";
-    if(!monitored) {
-        query << " \"" << this->nodeM.id <<"\")";
-    }else {
-        query << " \""<< monitored->id <<"\")";
+    char buf[1024];
+    vector<long long> res;
+    std::sprintf(buf,"SELECT strftime('%%s',lasttime) FROM MNodes WHERE (strftime('%%s',lasttime)-%" PRId64" > 0) AND (id = \"%s\") ", hardware.lasttime, node.id.c_str());
+    int err = sqlite3_exec(this->db, buf, IStorage::VectorIntCallback, &res, &zErrMsg);
+    isError(err, zErrMsg, "addNodeLeader0");
+
+    if(!res.size()) {
+        stringstream query;
+        query <<    "INSERT OR REPLACE INTO MNodes"
+                    " (id, ip, port, cores, mean_free_cpu, var_free_cpu, memory, mean_free_memory, var_free_memory, disk, mean_free_disk, var_free_disk, lasttime, monitoredBy)"
+                    " VALUES (\""<< node.id <<"\", \""<< node.ip <<"\", \""<< node.port <<"\", "<<
+                        hardware.cores <<", "<< hardware.mean_free_cpu <<", "<< hardware.var_free_cpu <<", "<<
+                        hardware.memory <<", "<< hardware.mean_free_memory <<", "<< hardware.var_free_memory <<", "<<
+                        hardware.disk <<", "<< hardware.mean_free_disk <<", "<< hardware.var_free_disk <<", DATETIME("<< hardware.lasttime <<",\"unixepoch\"),";
+        if(!monitored) {
+            query << " \"" << this->nodeM.id <<"\")";
+        }else {
+            query << " \""<< monitored->id <<"\")";
+        }
+        int err = sqlite3_exec(this->db, query.str().c_str(), 0, 0, &zErrMsg);
+        isError(err, zErrMsg, "addNodeLeader1");
+        return node.id;
     }
-    
-    int err = sqlite3_exec(this->db, query.str().c_str(), 0, 0, &zErrMsg);
-    isError(err, zErrMsg, "addNodeLeader");
-    return node.id;
+    return "";
 }
 
 void LeaderStorage::addIot(Message::node node, Report::IoT iot) {
@@ -149,10 +156,11 @@ void LeaderStorage::addReportBandwidth(Message::node node, vector<Report::test_r
  }
 
 void LeaderStorage::addReport(Report::report_result result, Message::node *monitored) {
-    this->addNode(result.source, result.hardware, monitored);
-    this->addReportLatency(result.source, result.latency);
-    this->addReportBandwidth(result.source, result.bandwidth);
-    this->addReportIot(result.source, result.iot);
+    if( this->addNode(result.source, result.hardware, monitored) != "") {
+        this->addReportLatency(result.source, result.latency);
+        this->addReportBandwidth(result.source, result.bandwidth);
+        this->addReportIot(result.source, result.iot);
+    }
 }
 
 void LeaderStorage::addReport(std::vector<Report::report_result> results, Message::node node) {
@@ -167,10 +175,12 @@ void LeaderStorage::addReport(std::vector<Report::report_result> results, Messag
             if(test.target.ip == string("::1"))
                 test.target.ip = node.ip;
         }
-        this->addNode(result.source, result.hardware, &node);
+        Message::node leader(result.leader,"","");
+        this->addNode(result.source, result.hardware, &leader);
     }
     for(auto result : results) {
-        this->addReport(result, &node);
+        Message::node leader(result.leader,"","");
+        this->addReport(result, &leader);
     }
 }
 
@@ -252,22 +262,23 @@ void LeaderStorage::addMNode(Message::node node) {
 }
 
 vector<Report::report_result> LeaderStorage::getReport() {
-    vector<Message::node> ips = this->getNodes();
+    sqlite3_exec(db, "BEGIN TRANSACTION;", NULL, NULL, NULL);
+    vector<Message::node> ips = this->getAllNodes();
     vector<Report::report_result> res;
 
     for(auto ip : ips) {
         res.push_back(this->getReport(ip));
     }
-
+    sqlite3_exec(db, "END TRANSACTION;", NULL, NULL, NULL);
     return res;
 }
 
 Report::hardware_result LeaderStorage::getHardware(Message::node node) {
     char *zErrMsg = 0;
     char buf[1024];
-    std::sprintf(buf,"SELECT * FROM MNodes WHERE id = \"%s\" GROUP BY ip", node.id.c_str());
+    std::sprintf(buf,"SELECT *, strftime('%%s','now') as lasttime FROM MNodes WHERE id = \"%s\" GROUP BY ip", node.id.c_str());
 
-    Report::hardware_result r(-1,0,0,0,0,0);
+    Report::hardware_result r(-1,0,0,0,0,0,0);
 
     int err = sqlite3_exec(this->db, buf, IStorage::getHardwareCallback, &r, &zErrMsg);
     isError(err, zErrMsg, "getHardwareLeader");
@@ -311,12 +322,61 @@ Report::report_result LeaderStorage::getReport(Message::node node) {
 
     r.bandwidth = this->getBandwidth(r.source);
 
+    vector<string> vec;
+    char *zErrMsg = 0;
+    char buf[1024];
+    std::sprintf(buf,"SELECT monitoredBy FROM MNodes WHERE id = \"%s\"", node.id.c_str());
+    int err = sqlite3_exec(this->db, buf, IStorage::VectorStringCallback, &vec, &zErrMsg);
+    isError(err, zErrMsg, "getReport getting leader");
+    r.leader = vec[0];
+
     return r;
+}
+
+
+void LeaderStorage::removeOldLNodes(int seconds) {
+    char *zErrMsg = 0;
+    char buf[1024];
+    sqlite3_exec(db, "BEGIN TRANSACTION;", NULL, NULL, NULL);
+    std::sprintf(buf,"SELECT monitoredBy FROM MNodes GROUP BY monitoredBy having strftime('%%s',max(lasttime))+%d-strftime('%%s','now') <= 0",seconds);
+
+    vector<string> leaders;
+
+    int err = sqlite3_exec(this->db, buf, IStorage::VectorStringCallback, &leaders, &zErrMsg);
+    isError(err, zErrMsg, "removeOldLNodesLeader1");
+
+    for(string leader : leaders) {
+        std::sprintf(buf,"DELETE FROM MMNodes WHERE id = \"%s\"", leader.c_str());
+        err = sqlite3_exec(this->db, buf, 0, 0, &zErrMsg);
+        isError(err, zErrMsg, "removeOldNodesLeader2");
+
+        vector<string> ids;
+        std::sprintf(buf,"SELECT id FROM MNodes WHERE monitoredBy = \"%s\"", leader.c_str());
+        int err = sqlite3_exec(this->db, buf, IStorage::VectorStringCallback, &ids, &zErrMsg);
+        isError(err, zErrMsg, "removeOldLNodesLeader3");
+
+        std::sprintf(buf,"DELETE FROM MNodes WHERE monitoredBy = \"%s\"", leader.c_str());
+        err = sqlite3_exec(this->db, buf, 0, 0, &zErrMsg);
+        isError(err, zErrMsg, "removeOldNodesLeader4");
+
+        for(string id : ids) {
+            std::sprintf(buf,"DELETE FROM MLinks WHERE idA = \"%s\" OR idB = \"%s\"", id.c_str(),id.c_str());
+            int err = sqlite3_exec(this->db, buf, 0, 0, &zErrMsg);
+            isError(err, zErrMsg, "removeOldLNodesLeader5");
+
+            std::sprintf(buf,"DELETE FROM MIots WHERE idNode = \"%s\"", id.c_str());
+            err = sqlite3_exec(this->db, buf, 0, 0, &zErrMsg);
+            isError(err, zErrMsg, "removeOldLNodesLeader6");
+        }
+    }
+    sqlite3_exec(db, "END TRANSACTION;", NULL, NULL, NULL);     
 }
 
 void LeaderStorage::removeOldNodes(int seconds) {
     char *zErrMsg = 0;
     char buf[1024];
+
+    sqlite3_exec(db, "BEGIN TRANSACTION;", NULL, NULL, NULL);
 
     std::vector<Message::node> vec = this->getMLRHardware(100, seconds);
 
@@ -335,7 +395,8 @@ void LeaderStorage::removeOldNodes(int seconds) {
 
         err = sqlite3_exec(this->db, buf, 0, 0, &zErrMsg);
         isError(err, zErrMsg, "removeOldNodesLeader3");
-    }    
+    }
+    sqlite3_exec(db, "END TRANSACTION;", NULL, NULL, NULL);    
 }
 
 void LeaderStorage::complete() {
