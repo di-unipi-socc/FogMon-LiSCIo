@@ -5,3 +5,6 @@ Fed4Fire+
 **/__pycache__
 .*
 **/*.md
+**/*Dockerfile
+**/.dockerignore
+build.sh

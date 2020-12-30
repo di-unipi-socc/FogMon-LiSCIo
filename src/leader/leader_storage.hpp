@@ -41,6 +41,7 @@ public:
     std::vector<Message::node> getMLRLatency(int num, int seconds);
     std::vector<Message::node> getMLRBandwidth(int num, int seconds);
 
+    virtual void removeOldLNodes(int seconds);
     virtual void removeOldNodes(int seconds);
 
     void complete();

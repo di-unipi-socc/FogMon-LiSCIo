@@ -132,6 +132,7 @@ int main(int argc, char *argv[]) {
             default:
             break;
         }
+        a=-1;
         scanf("%d",&a);
     }while(true);
     printf("exiting as requested\n");

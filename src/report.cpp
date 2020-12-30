@@ -37,17 +37,20 @@ void Report::setHardware(hardware_result hardware) {
     Value mean_free_disk(hardware.mean_free_disk);
     Value var_free_disk(hardware.var_free_disk);
 
-    obj.AddMember("cores", cores, doc.GetAllocator());
-    obj.AddMember("mean_free_cpu", mean_free_cpu, doc.GetAllocator());
-    obj.AddMember("var_free_cpu", var_free_cpu, doc.GetAllocator());
-    obj.AddMember("memory", memory, doc.GetAllocator());
-    obj.AddMember("mean_free_memory", mean_free_memory, doc.GetAllocator());
-    obj.AddMember("var_free_memory", var_free_memory, doc.GetAllocator());
-    obj.AddMember("disk", disk, doc.GetAllocator());
-    obj.AddMember("mean_free_disk", mean_free_disk, doc.GetAllocator());
-    obj.AddMember("var_free_disk", var_free_disk, doc.GetAllocator());
+    Document::AllocatorType& allocator = doc.GetAllocator();
 
-    doc.AddMember("hardware", obj, doc.GetAllocator());
+    obj.AddMember("cores", cores, allocator);
+    obj.AddMember("mean_free_cpu", mean_free_cpu, allocator);
+    obj.AddMember("var_free_cpu", var_free_cpu, allocator);
+    obj.AddMember("memory", memory, allocator);
+    obj.AddMember("mean_free_memory", mean_free_memory, allocator);
+    obj.AddMember("var_free_memory", var_free_memory, allocator);
+    obj.AddMember("disk", disk, allocator);
+    obj.AddMember("mean_free_disk", mean_free_disk, allocator);
+    obj.AddMember("var_free_disk", var_free_disk, allocator);
+    obj.AddMember("lasttime", hardware.lasttime, allocator);
+
+    doc.AddMember("hardware", obj, allocator);
 }
 
 void Report::setLatency(vector<test_result> latency) {
@@ -154,15 +157,16 @@ void Report::setReports(std::vector<report_result> reports) {
             Value mean_free_disk(hardware.mean_free_disk);
             Value var_free_disk(hardware.var_free_disk);
 
-            hw.AddMember("cores", cores, doc.GetAllocator());
-            hw.AddMember("mean_free_cpu", mean_free_cpu, doc.GetAllocator());
-            hw.AddMember("var_free_cpu", var_free_cpu, doc.GetAllocator());
-            hw.AddMember("memory", memory, doc.GetAllocator());
-            hw.AddMember("mean_free_memory", mean_free_memory, doc.GetAllocator());
-            hw.AddMember("var_free_memory", var_free_memory, doc.GetAllocator());
-            hw.AddMember("disk", disk, doc.GetAllocator());
-            hw.AddMember("mean_free_disk", mean_free_disk, doc.GetAllocator());
-            hw.AddMember("var_free_disk", var_free_disk, doc.GetAllocator());
+            hw.AddMember("cores", cores, allocator);
+            hw.AddMember("mean_free_cpu", mean_free_cpu, allocator);
+            hw.AddMember("var_free_cpu", var_free_cpu, allocator);
+            hw.AddMember("memory", memory, allocator);
+            hw.AddMember("mean_free_memory", mean_free_memory, allocator);
+            hw.AddMember("var_free_memory", var_free_memory, allocator);
+            hw.AddMember("disk", disk, allocator);
+            hw.AddMember("mean_free_disk", mean_free_disk, allocator);
+            hw.AddMember("var_free_disk", var_free_disk, allocator);
+            hw.AddMember("lasttime", hardware.lasttime, allocator);
         }
         
         for(auto testLt : test.latency) {
@@ -205,12 +209,14 @@ void Report::setReports(std::vector<report_result> reports) {
 
         
         Value obj(kObjectType);
-        
+        Value leader(test.leader.c_str(), allocator);
+
         obj.AddMember("source",test.source.getJson(allocator), allocator);
         obj.AddMember("hardware",hw, allocator);
         obj.AddMember("latency",lt, allocator);
         obj.AddMember("bandwidth",bw, allocator);
         obj.AddMember("iot",th, allocator);
+        obj.AddMember("leader",leader, allocator);
 
         arr.PushBack(obj, allocator);
     }
@@ -232,7 +238,8 @@ bool Report::getHardware(hardware_result& hardware) {
         !val.HasMember("var_free_memory") || !val["var_free_memory"].IsFloat() ||
         !val.HasMember("disk") || !val["disk"].IsInt64() ||
         !val.HasMember("mean_free_disk") || !val["mean_free_disk"].IsFloat() ||
-        !val.HasMember("var_free_disk") || !val["var_free_disk"].IsFloat())
+        !val.HasMember("var_free_disk") || !val["var_free_disk"].IsFloat() ||
+        !val.HasMember("lasttime") || !val["lasttime"].IsInt64())
         return false;
 
     hardware.cores = val["cores"].GetInt();
@@ -244,6 +251,7 @@ bool Report::getHardware(hardware_result& hardware) {
     hardware.disk = val["disk"].GetInt64();
     hardware.mean_free_disk = val["mean_free_disk"].GetFloat();
     hardware.var_free_disk = val["var_free_disk"].GetFloat();
+    hardware.lasttime = val["lasttime"].GetInt64();
     
     return true;
 }
@@ -336,7 +344,8 @@ bool Report::getReports(std::vector<report_result> &reports) {
             !v.HasMember("latency") || !v["latency"].IsArray() ||
             !v.HasMember("bandwidth") || !v["bandwidth"].IsArray() ||
             !v.HasMember("iot") || !v["iot"].IsArray() ||
-            !v.HasMember("source") || !v["source"].IsObject())
+            !v.HasMember("source") || !v["source"].IsObject() ||
+            !v.HasMember("leader") || !v["leader"].IsString())
             return false;
         report_result result;
         memset(&result.hardware,0,sizeof(Report::hardware_result));
@@ -352,7 +361,8 @@ bool Report::getReports(std::vector<report_result> &reports) {
             !val.HasMember("var_free_memory") || !val["var_free_memory"].IsFloat() ||
             !val.HasMember("disk") || !val["disk"].IsInt64() ||
             !val.HasMember("mean_free_disk") || !val["mean_free_disk"].IsFloat() ||
-            !val.HasMember("var_free_disk") || !val["var_free_disk"].IsFloat())
+            !val.HasMember("var_free_disk") || !val["var_free_disk"].IsFloat() ||
+            !val.HasMember("lasttime") || !val["lasttime"].IsInt64())
             return false;
         {
             result.hardware.cores = val["cores"].GetInt();
@@ -364,6 +374,7 @@ bool Report::getReports(std::vector<report_result> &reports) {
             result.hardware.disk = val["disk"].GetInt64();
             result.hardware.mean_free_disk = val["mean_free_disk"].GetFloat();
             result.hardware.var_free_disk = val["var_free_disk"].GetFloat();
+            result.hardware.lasttime = val["lasttime"].GetInt64();
         }
 
         for (auto& v : v["latency"].GetArray()) {
@@ -411,7 +422,7 @@ bool Report::getReports(std::vector<report_result> &reports) {
 
             result.iot.push_back(iot);
         }
-
+        result.leader = v["leader"].GetString();
         reports.push_back(result);
     }
 

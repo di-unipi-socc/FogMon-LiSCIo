@@ -134,6 +134,13 @@ void LeaderConnections::handler(int fd, Message &m) {
             Message::leader_update update;
             m.getData(update);
             bool r = true;
+            cout << "SELECTION END: "<< update.selected.size() << endl;
+            for(auto &node : update.selected) {
+                if(node.ip == "::1" || node.ip == "127.0.0.1") {
+                    node.ip = strIp;
+                }
+                cout << node.ip << endl;
+            }
 
             if(m.getArgument() == Message::Argument::POSITIVE) {
                 this->parent->changeRoles(update);

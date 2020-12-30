@@ -45,16 +45,21 @@ public:
         */
         float mean_free_disk = 0;
         float var_free_disk = 0;
+        /**
+         * the time of the last test
+        */
+        int64_t lasttime;
         hardware_result() {}
-        hardware_result(int cores, float free_cpu, int64_t memory, float free_memory, int64_t disk, float free_disk) {
+        hardware_result(int cores, float free_cpu, int64_t memory, float free_memory, int64_t disk, float free_disk, int64_t lasttime) {
             this->cores = cores;
             this->mean_free_cpu = free_cpu;
             this->memory = memory;
             this->mean_free_memory = free_memory;
             this->disk = disk;
             this->mean_free_disk = free_disk;
+            this->lasttime = lasttime;
         }
-        hardware_result(int cores, float mean_free_cpu, float var_free_cpu, int64_t memory, float mean_free_memory, float var_free_memory,  int64_t disk,  float mean_free_disk, float var_free_disk) {
+        hardware_result(int cores, float mean_free_cpu, float var_free_cpu, int64_t memory, float mean_free_memory, float var_free_memory,  int64_t disk,  float mean_free_disk, float var_free_disk, int64_t lasttime) {
             this->cores = cores;
             this->mean_free_cpu = mean_free_cpu;
             this->var_free_cpu = var_free_cpu;
@@ -64,6 +69,7 @@ public:
             this->disk = disk;
             this->mean_free_disk = mean_free_disk;
             this->var_free_disk = var_free_disk;
+            this->lasttime = lasttime;
         }
     }hardware_result;
     /**
@@ -132,10 +138,13 @@ public:
          * a vector of Things
         */
         std::vector<IoT> iot;
-
+        /**
+         * the leader of this node
+        */
+        std::string leader;
         report_result() {}
-        report_result(Message::node Source, hardware_result Hardware, std::vector<test_result> Latency, std::vector<test_result> Bandwidth, std::vector<IoT> Iot)
-        : source(Source), hardware(Hardware), latency(Latency), bandwidth(Bandwidth), iot(Iot) {}
+        report_result(Message::node Source, hardware_result Hardware, std::vector<test_result> Latency, std::vector<test_result> Bandwidth, std::vector<IoT> Iot, std::string _leader)
+        : source(Source), hardware(Hardware), latency(Latency), bandwidth(Bandwidth), iot(Iot), leader(_leader) {}
     }report_result;
 
     /**
