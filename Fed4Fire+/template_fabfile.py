@@ -17,7 +17,10 @@ user = "marcog"
 
 enable_nat = ["wget -O - -nv https://www.wall2.ilabt.iminds.be/enable-nat.sh | sudo bash"]
 
-image = "diunipisocc/liscio-fogmon:test"
+images = [
+    "diunipisocc/liscio-fogmon:test",
+    "diunipisocc/liscio-fogmon:valgrind"
+]
 
 docker = [
     'sudo service ntp stop',
@@ -196,7 +199,7 @@ def removeNetwork(ctx):
     for conn in ctx.CONNS:
         print(spec["nodes"][conn.original_host])
         conn.sudo(f"sed -i '/127.0.0.1\t{conn.original_host}/d' /etc/hosts")
-        conn.sudo(f"sed -i -E 's/([a-z0-9-]+) ([a-zA-Z0-9-]+) ([a-zA-Z0-9-]+)$/\\3 \\1 \\2/' /etc/hosts")
+        conn.sudo(f"sed -i -E 's/([a-z0-9-]+) ([a-zA-Z0-9-]+) ([a-zA-Z0-9-]+)$/\\2 \\3 \\1/' /etc/hosts")
         for l,v in spec["links"].items():
             n1 = v["interfaces"][0].split(":")[0]
             n2 = v["interfaces"][1].split(":")[0]
@@ -250,7 +253,8 @@ def setupVbox(ctx):
 def pullFogmon(ctx):
     staging(ctx)
     for conn in ctx.CONNS:
-        conn.run(f"screen -d -m -S fogmon bash -c 'sudo docker pull {image}'")
+        for image in images:
+            conn.run(f"screen -d -m -S fogmon bash -c 'sudo docker pull {image}'")
 
 
 @task
@@ -259,7 +263,9 @@ def startFogmon(ctx):
     leader = None
     for conn in ctx.CONNS:
         if leader is None:
-            conn.run(f"screen -d -m -S fogmon bash -c 'sudo docker run -it --net=host {image} --leader'")
+            # sudo docker run -it --net=host diunipisocc/liscio-fogmon:test --leader
+            conn.run(f"screen -d -m -S fogmon bash -c 'sudo docker run -it --net=host {images[0]} --leader'")
             leader = conn.original_host
         else:
-            conn.run(f"screen -d -m -S fogmon bash -c 'sudo docker run -it --net=host {image} -C {leader}'")
+            # sudo docker run -it --net=host diunipisocc/liscio-fogmon:test -C node0
+            conn.run(f"screen -d -m -S fogmon bash -c 'sudo docker run -it --net=host {images[0]} -C {leader}'")

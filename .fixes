@@ -1,3 +1,6 @@
 changed getSource function to use getnameinfo for name resolution instead of using the raw ip.
 changed exit condition for the program: 0 to exit.
 fixed recv and write for errno == EINPROGRESS.
+fixed bugs on leader crash.
+fixed bugs on gossiping protocol.
+added valgrind version for debug of crashes.
