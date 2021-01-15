@@ -294,3 +294,32 @@ def startFogmon(ctx):
         else:
             # sudo docker run -it --net=host diunipisocc/liscio-fogmon:test -C node0
             conn.run(f"screen -d -m -S fogmon bash -c 'sudo docker run -it --net=host {images[0]} -C {leader}'")
+        print(conn.original_host)
+
+@task
+def startFogmonValgrind(ctx):
+    staging(ctx)
+    leader = None
+    for conn in ctx.CONNS:
+        if leader is None:
+            # sudo docker run -it --net=host diunipisocc/liscio-fogmon:test --leader
+            conn.run(f"screen -d -m -S fogmon bash -c 'sudo docker run -it --net=host {images[1]} --leader > log.txt'")
+            leader = conn.original_host
+        else:
+            # sudo docker run -it --net=host diunipisocc/liscio-fogmon:test -C node0
+            conn.run(f"screen -d -m -S fogmon bash -c 'sudo docker run -it --net=host {images[1]} -C {leader} > log.txt'")
+        print(conn.original_host)
+
+@task
+def gatherFogmonValgrind(ctx):
+    staging(ctx)
+    for conn in ctx.CONNS:
+        host = conn.original_host
+        conn.get("log.txt", host+"-log.txt")
+        print(conn.original_host)
+
+@task
+def stopFogmon(ctx):
+    staging(ctx)
+    for conn in ctx.CONNS:
+        conn.run("screen -S fogmon -X stuff '0'`echo -ne '\015'` | docker ps")
