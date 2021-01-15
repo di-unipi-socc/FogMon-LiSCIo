@@ -13,5 +13,6 @@ build
 spec.json
 Fed4Fire+/*.zip
 Fed4Fire+/*.xml
+Fed4Fire+/logs
 __pycache__/
 *.pyc

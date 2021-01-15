@@ -17,7 +17,10 @@ user = "marcog"
 
 enable_nat = ["wget -O - -nv https://www.wall2.ilabt.iminds.be/enable-nat.sh | sudo bash"]
 
-image = "diunipisocc/liscio-fogmon:test"
+images = [
+    "diunipisocc/liscio-fogmon:test",
+    "diunipisocc/liscio-fogmon:valgrind"
+]
 
 docker = [
     'sudo service ntp stop',
@@ -32,7 +35,6 @@ docker = [
     f"sudo usermod -aG docker {user}",
     #"newgrp docker"
     "sudo apt-get install screen"
-    f"sudo docker pull {image}"
 ]
 
 vbox = [
@@ -133,15 +135,16 @@ def setupNetwork(ctx):
     getIpv6s(ctx)
     spec = ctx.SPEC
     for conn in ctx.CONNS:
+        comms = []
         print(spec["nodes"][conn.original_host])
-        conn.sudo(f"sed -i -E 's/([a-z0-9-]+) ([a-zA-Z0-9-]+) ([a-zA-Z0-9-]+)$/\\3 \\1 \\2/' /etc/hosts")
-        conn.sudo(f"sed -i '/127.0.0.1\t{conn.original_host}/d' /etc/hosts")
-        conn.run(f'sudo bash -c \'echo "127.0.0.1\t{conn.original_host}" >> /etc/hosts\'')
+        comms.append(f"sed -i -E 's/([a-z0-9-]+) ([a-zA-Z0-9-]+) ([a-zA-Z0-9-]+)$/\\3 \\1 \\2/' /etc/hosts")
+        comms.append(f"sed -i '/127.0.0.1\t{conn.original_host}/d' /etc/hosts")
+        comms.append(f'bash -c \'echo "127.0.0.1\t{conn.original_host}" >> /etc/hosts\'')
         if spec["nodes"][conn.original_host]["testbed"] != TestBeds.CITY.value:
             for comm in enable_nat:
-                conn.run(comm)
-        if spec["nodes"][conn.original_host]["testbed"] == TestBeds.CITY.value:
-            conn.run("sudo sudo ip link set dev enp2s0 mtu 1400")
+                comms.append(comm)
+        # if spec["nodes"][conn.original_host]["testbed"] == TestBeds.CITY.value:
+        #     comms.append("sudo sudo ip link set dev enp2s0 mtu 1400")
         for l,v in spec["links"].items():
             n1 = v["interfaces"][0].split(":")[0]
             n2 = v["interfaces"][1].split(":")[0]
@@ -162,41 +165,52 @@ def setupNetwork(ctx):
                 myip = v["ips"][0]
                 otherip = v["ips"][1]
                 found = True
-            if not v["same_testbed"] or v["testbed"] == TestBeds.CITY.value:
-                if found:
-                    conn.run(f"sudo ip -6 link add name {grename} type ip6gre local {myipv6} remote {otheripv6} ttl 64")
-                    conn.run(f"sudo ip link set up dev {grename}")
-                    conn.run(f"sudo ip addr add {myip} peer {otherip} dev {grename}")
-                    conn.run(f"sudo sudo ip link set dev {grename} mtu 1400")
-                    conn.sudo(f"sed -i '/{otherip}/d' /etc/hosts")
-                    conn.run(f'sudo bash -c \'echo "{otherip}\t{othername}" >> /etc/hosts\'')
-                    if "capacity" in v or "latency" in v or "packet_loss" in v:
-                        command = f"sudo tc qdisc add dev {grename} root netem "
-                        if "latency" in v:
-                            latency = v["latency"]
-                            if not v["same_testbed"]:
-                                latency -=3
-                            else:
-                                latency -=2
-                            latency = latency//2
-                            command+= f"delay {latency}ms "
-                        if "capacity" in v:
-                            capacity = v["capacity"]
-                            command+= f"rate {capacity}kbit "
-                        if "packet_loss" in v:
-                            packet_loss = v["packet_loss"]
-                            command+= f"loss random {packet_loss}% "
-                        conn.run(command)
-                        print(command)
+            # if not v["same_testbed"] or v["testbed"] == TestBeds.CITY.value:
+            if found:
+                comms.append(f"ip -6 link add name {grename} type ip6gre local {myipv6} remote {otheripv6} ttl 64")
+                comms.append(f"ip link set up dev {grename}")
+                comms.append(f"ip addr add {myip} peer {otherip} dev {grename}")
+                comms.append(f"ip link set dev {grename} mtu 1400")
+                comms.append(f"sed -i '/{otherip}/d' /etc/hosts")
+                comms.append(f'bash -c \'echo "{otherip}\t{othername}" >> /etc/hosts\'')
+                if "capacity" in v or "latency" in v or "packet_loss" in v:
+                    command = f"tc qdisc add dev {grename} root netem "
+                    if "latency" in v:
+                        latency = v["latency"]
+                        if not v["same_testbed"]:
+                            latency -=3
+                        elif v["testbed"] == TestBeds.CITY.value:
+                            latency -=2
+                        latency = latency//2
+                        command+= f"delay {latency}ms "
+                    if "capacity" in v:
+                        capacity = v["capacity"]
+                        command+= f"rate {capacity}kbit "
+                    if "packet_loss" in v:
+                        packet_loss = v["packet_loss"]
+                        command+= f"loss random {packet_loss}% "
+                    comms.append(command)
+                    print(command)
+        
+        file = "/tmp/script6fdghf37ffa.sh"
+        conn.run(f"> {file}")
+        print(f"created {file}")
+        conn.run(f"chmod +x {file}")
+        line = ""
+        for comm in comms:
+            line += f"sudo {comm}\n"
+        conn.run(f'echo \"{line}\" >> {file}')
+        conn.run(f"screen -d -m -S network bash -c '{file}'")
         
 @task
 def removeNetwork(ctx):
     staging(ctx)
     spec = ctx.SPEC
     for conn in ctx.CONNS:
+        comms = []
         print(spec["nodes"][conn.original_host])
-        conn.sudo(f"sed -i '/127.0.0.1\t{conn.original_host}/d' /etc/hosts")
-        conn.sudo(f"sed -i -E 's/([a-z0-9-]+) ([a-zA-Z0-9-]+) ([a-zA-Z0-9-]+)$/\\3 \\1 \\2/' /etc/hosts")
+        comms.append(f"sed -i '/127.0.0.1\t{conn.original_host}/d' /etc/hosts")
+        comms.append(f"sed -i -E 's/([a-z0-9-]+) ([a-zA-Z0-9-]+) ([a-zA-Z0-9-]+)$/\\2 \\3 \\1/' /etc/hosts")
         for l,v in spec["links"].items():
             n1 = v["interfaces"][0].split(":")[0]
             n2 = v["interfaces"][1].split(":")[0]
@@ -211,10 +225,19 @@ def removeNetwork(ctx):
                 found = True
             if found:
                 try:
-                    conn.run(f"sudo ip -6 link del dev {grename}")
-                    conn.sudo(f"sed -i '/{otherip}/d' /etc/hosts")
+                    comms.append(f"ip -6 link del dev {grename}")
+                    comms.append(f"sed -i '/{otherip}/d' /etc/hosts")
                 except:
                     pass
+        file = "/tmp/scripd4h6ghf37ffa.sh"
+        conn.run(f"> {file}")
+        print(f"created {file}")
+        conn.run(f"chmod +x {file}")
+        line = ""
+        for comm in comms:
+            line += f"sudo {comm}\n"
+        conn.run(f'echo \"{line}\" >> {file}')
+        conn.run(f"screen -d -m -S network bash -c '{file}'")
 
 @task
 def setupDocker(ctx):
@@ -227,8 +250,10 @@ def setupDocker(ctx):
                 conn.run(f"> {file}")
                 print(f"created {file}")
                 conn.run(f"chmod +x {file}")
+                line = ""
                 for comm in docker:
-                    conn.run(f'echo \'{comm}\' >> {file}')
+                    line += f"{comm}\n"
+                conn.run(f'echo \'{line}\' >> {file}')
                 conn.run(f"screen -d -m -S docker bash -c '{file}'")
 
 @task
@@ -250,7 +275,11 @@ def setupVbox(ctx):
 def pullFogmon(ctx):
     staging(ctx)
     for conn in ctx.CONNS:
-        conn.run(f"screen -d -m -S fogmon bash -c 'sudo docker pull {image}'")
+        i=0
+        for image in images:
+            conn.run(f"screen -d -m -S fogmon-{i} bash -c 'sudo docker pull {image}'")
+            i+=1
+        print(conn.original_host)
 
 
 @task
@@ -259,7 +288,38 @@ def startFogmon(ctx):
     leader = None
     for conn in ctx.CONNS:
         if leader is None:
-            conn.run(f"screen -d -m -S fogmon bash -c 'sudo docker run -it --net=host {image} --leader'")
+            # sudo docker run -it --net=host diunipisocc/liscio-fogmon:test --leader
+            conn.run(f"screen -d -m -S fogmon bash -c 'sudo docker run -it --net=host {images[0]} --leader'")
             leader = conn.original_host
         else:
-            conn.run(f"screen -d -m -S fogmon bash -c 'sudo docker run -it --net=host {image} -C {leader}'")
+            # sudo docker run -it --net=host diunipisocc/liscio-fogmon:test -C node0
+            conn.run(f"screen -d -m -S fogmon bash -c 'sudo docker run -it --net=host {images[0]} -C {leader}'")
+        print(conn.original_host)
+
+@task
+def startFogmonValgrind(ctx):
+    staging(ctx)
+    leader = None
+    for conn in ctx.CONNS:
+        if leader is None:
+            # sudo docker run -it --net=host diunipisocc/liscio-fogmon:test --leader
+            conn.run(f"screen -d -m -S fogmon bash -c 'sudo docker run -it --net=host {images[1]} --leader > log.txt'")
+            leader = conn.original_host
+        else:
+            # sudo docker run -it --net=host diunipisocc/liscio-fogmon:test -C node0
+            conn.run(f"screen -d -m -S fogmon bash -c 'sudo docker run -it --net=host {images[1]} -C {leader} > log.txt'")
+        print(conn.original_host)
+
+@task
+def gatherFogmonValgrind(ctx):
+    staging(ctx)
+    for conn in ctx.CONNS:
+        host = conn.original_host
+        conn.get("log.txt", host+"-log.txt")
+        print(conn.original_host)
+
+@task
+def stopFogmon(ctx):
+    staging(ctx)
+    for conn in ctx.CONNS:
+        conn.run("screen -S fogmon -X stuff '0'`echo -ne '\015'` | docker ps")
