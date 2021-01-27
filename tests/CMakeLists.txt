@@ -35,12 +35,14 @@ find_library(SQLITE_LIBRARY sqlite3)
 find_library(SERIALPORT_LIBRARY serialport)
 find_library(PTHREAD_LIBRARY pthread)
 find_library(SIGAR_LIBRARY sigar)
-
+find_library(CURL_LIBRARY curl)
 find_library(UUID_LIBRARY uuid)
+
 target_link_libraries(Tests ${UUID_LIBRARY})
 target_link_libraries(Tests ${SQLITE_LIBRARY})
 target_link_libraries(Tests gtest ${PTHREAD_LIBRARY} ${SIGAR_LIBRARY})
 target_link_libraries(Tests ${SERIALPORT_LIBRARY})
+target_link_libraries(Tests ${CURL_LIBRARY})
 add_test( Tests Tests )
 
 if(CMAKE_COMPILER_IS_GNUCXX)

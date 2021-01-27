@@ -4,6 +4,8 @@
 #include <vector>
 #include <string>
 #include "rapidjson/document.h"
+#include "rapidjson/writer.h"
+#include "rapidjson/stringbuffer.h"
 
 class Report;
 /**
@@ -128,7 +130,17 @@ public:
             this->id = v["id"].GetInt();
             return true;
         }
-
+        std::string getString() {
+            rapidjson::StringBuffer s;
+            rapidjson::Writer<rapidjson::StringBuffer> writer (s);
+            rapidjson::Document doc;
+            doc.SetObject();
+            rapidjson::Document::AllocatorType& allocator = doc.GetAllocator();
+            doc.AddMember("leader_update", this->getJson(allocator), allocator);
+            doc.Accept (writer);
+            std::string str (s.GetString());
+            return str;
+        }
     }leader_update;
 
     Message();

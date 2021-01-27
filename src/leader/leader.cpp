@@ -14,6 +14,8 @@
 #include "rapidjson/writer.h"
 #include "rapidjson/stringbuffer.h"
 
+#include "uiconnection.hpp"
+
 using namespace std;
 
 Leader::Leader(Message::node node, int nThreads) : Follower(node, nThreads), selector(this) {
@@ -150,6 +152,11 @@ void Leader::timerFun() {
         
         if(iter % 5 == 0) {
             this->getStorage()->complete();
+            {
+                vector<Report::report_result> report = this->getStorage()->getReport();
+                UIConnection conn(this->node->interfaceIp);
+                conn.sendTopology(report);
+            }
 
             this->selector.checkSelection();
         }

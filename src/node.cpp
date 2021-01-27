@@ -141,6 +141,15 @@ string Node::genId() {
     return newUUID();
 }
 
+bool Node::setParam(std::string name, std::string value){
+    if(name == string("interface")) {
+        this->interfaceIp = value;
+    }else{
+        return false;
+    }
+    return true;
+}
+
 bool Node::setParam(std::string name, int value) {
     if(name == string("time-report")) {
         this->timeReport = value;

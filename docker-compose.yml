@@ -5,7 +5,7 @@ services:
     # build:
     #   context: .
     #   dockerfile: Dockerfile
-    command: --leader
+    command: --leader -i 131.114.72.76
     stdin_open: true
     # tty: true
     networks:
@@ -17,7 +17,7 @@ services:
     # build:
     #   context: .
     #   dockerfile: Dockerfile
-    command: -C leader
+    command: -C leader -i 131.114.72.76
     stdin_open: true
     depends_on:
       - leader
@@ -30,7 +30,7 @@ services:
     # build:
     #   context: .
     #   dockerfile: Dockerfile
-    command: -C leader
+    command: -C leader -i 131.114.72.76
     stdin_open: true
     depends_on:
       - leader
@@ -43,7 +43,7 @@ services:
     # build:
     #   context: .
     #   dockerfile: Dockerfile
-    command: -C leader
+    command: -C leader -i 131.114.72.76
     stdin_open: true
     depends_on:
       - leader

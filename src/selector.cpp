@@ -2,6 +2,8 @@
 #include "leader.hpp"
 #include <cmath>
 
+#include "uiconnection.hpp"
+
 using namespace std;
 Selector::Selector(ILeader *leader) {
     this->parent = leader;
@@ -320,6 +322,10 @@ void Selector::startSelection() {
             printf("preend selection\n");
             this->parent->changeRoles(sel);
             printf("ended selection\n");
+            {
+                UIConnection conn(this->parent->node->interfaceIp);
+                conn.sendChangeRole(sel);
+            }
         });
     }
 }

@@ -21,6 +21,8 @@ public:
     void stop();
 
     bool setParam(std::string name, int value);
+    
+    bool setParam(std::string name, std::string value);
 
     //promote to leader if follower
     virtual void promote();
@@ -44,6 +46,8 @@ public:
 
     int timeheartbeat;
     int timePropagation;
+
+    std::string interfaceIp;
 
 protected:
     IAgent * agent;

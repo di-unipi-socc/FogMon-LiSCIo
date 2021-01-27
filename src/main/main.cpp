@@ -27,10 +27,12 @@ int main(int argc, char *argv[]) {
 
     if(input.cmdOptionExists("-h") || input.cmdOptionExists("--help")) {
         cout << "Usage: ./program [OPTIONS]..." << endl<<endl;
-        cout << "--leader       for leader" <<endl;
-        cout << "-C             ip to connect" <<endl;
-        cout << "-P             port to connect" <<endl;
-        cout << "--my-port      listening port" <<endl;
+        cout << "param          value       comment"<<endl;
+        cout << "--leader                   for leader" <<endl;
+        cout << "-C             ip          ip to connect" <<endl;
+        cout << "-P             port        port to connect" <<endl;
+        cout << "--my-port      port        listening port" <<endl;
+        cout << "-i             ip          ip of the interface"<<endl;
         cout <<endl<< "there are other for timing" <<endl;
         return 0;
     }
@@ -71,6 +73,8 @@ int main(int argc, char *argv[]) {
 
     bool leader = false;
     
+    std::string interfaceIp = "";
+
     if(input.cmdOptionExists("--time-report"))
         time_report = stoi(input.getCmdOption("--time-report"));
 
@@ -95,6 +99,9 @@ int main(int argc, char *argv[]) {
     if(input.cmdOptionExists("--leader"))
         leader = true;
 
+    if(input.cmdOptionExists("-i"))
+        interfaceIp = input.getCmdOption("-i");
+
 
     Node node(myPort, leader, threads);
 
@@ -115,6 +122,7 @@ int main(int argc, char *argv[]) {
     node.setParam(string("time-bandwidth"), time_bandwidth);
     node.setParam(string("max-per-bandwidth"), max_bandwidth);
     node.setParam(string("leader-check"), leaderCheck);
+    node.setParam(string("interface"), interfaceIp);
 
     node.start();
 

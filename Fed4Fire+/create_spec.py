@@ -3,6 +3,28 @@ from spec import Spec
 from template_fabfile import TestBeds, Ubuntu
 import json
 
+from topology import Topology
+import random
+
+topology = Topology()
+topology.create_tree(6,[2,4,4,3,4,1],[(10,20),(1,5),(1,5),(1,40),(1,10)])
+
+cloud_high = random.sample(topology.return_level(2),  3) # Central cloud         3
+cloud_low = random.sample(topology.return_level(3),   5) # Decentralised cloud   5
+isp = random.sample(topology.return_level(4),         12) # ISP                   12
+home = random.sample(topology.return_level(5),        20) # Home                 20
+                                                   # =32                        =40
+selected = cloud_high + cloud_low + isp + home
+
+topology.purge(selected)
+M = topology.matrix(selected)
+
+matrix = []
+for i in selected:
+   latencies = [M[i][j] for j in selected]
+   uploads = [100000//M[i][j] if i!=j and M[i][j]!=0 else 0 for j in selected] # TODO add better values
+   testbed = TestBeds.WALL2 if i not in home else TestBeds.CITY
+   matrix.append((latencies,uploads,testbed))
 # the first and second matrix must be symmetric, the first represent the latency, the other represent the upload of every node against another
 # this example create 4 nodes, 2 from WALL2 and 2 from citylab
 # matrix = [
@@ -12,41 +34,41 @@ import json
 #    ([10,10,4,0],  [1000,0,1000,    0],  TestBeds.CITY),
 # ]
 
-matrix = [ # 28+5, diagonals are ignored
-   ([4]*28+[10]*5,  [1000]*28+[500]*5,  TestBeds.WALL2),
-   ([4]*28+[10]*5,  [1000]*28+[500]*5,  TestBeds.WALL2),
-   ([4]*28+[10]*5,  [1000]*28+[500]*5,  TestBeds.WALL2),
-   ([4]*28+[10]*5,  [1000]*28+[500]*5,  TestBeds.WALL2),
-   ([4]*28+[10]*5,  [1000]*28+[500]*5,  TestBeds.WALL2),
-   ([4]*28+[10]*5,  [1000]*28+[500]*5,  TestBeds.WALL2),
-   ([4]*28+[10]*5,  [1000]*28+[500]*5,  TestBeds.WALL2),
-   ([4]*28+[10]*5,  [1000]*28+[500]*5,  TestBeds.WALL2),
-   ([4]*28+[10]*5,  [1000]*28+[500]*5,  TestBeds.WALL2),
-   ([4]*28+[10]*5,  [1000]*28+[500]*5,  TestBeds.WALL2),
-   ([4]*28+[10]*5,  [1000]*28+[500]*5,  TestBeds.WALL2),
-   ([4]*28+[10]*5,  [1000]*28+[500]*5,  TestBeds.WALL2),
-   ([4]*28+[10]*5,  [1000]*28+[500]*5,  TestBeds.WALL2),
-   ([4]*28+[10]*5,  [1000]*28+[500]*5,  TestBeds.WALL2),
-   ([4]*28+[10]*5,  [1000]*28+[500]*5,  TestBeds.WALL2),
-   ([4]*28+[10]*5,  [1000]*28+[500]*5,  TestBeds.WALL2),
-   ([4]*28+[10]*5,  [1000]*28+[500]*5,  TestBeds.WALL2),
-   ([4]*28+[10]*5,  [1000]*28+[500]*5,  TestBeds.WALL2),
-   ([4]*28+[10]*5,  [1000]*28+[500]*5,  TestBeds.WALL2),
-   ([4]*28+[10]*5,  [1000]*28+[500]*5,  TestBeds.WALL2),
-   ([4]*28+[10]*5,  [1000]*28+[500]*5,  TestBeds.WALL2),
-   ([4]*28+[10]*5,  [1000]*28+[500]*5,  TestBeds.WALL2),
-   ([4]*28+[10]*5,  [1000]*28+[500]*5,  TestBeds.WALL2),
-   ([4]*28+[10]*5,  [1000]*28+[500]*5,  TestBeds.WALL2),
-   ([4]*28+[10]*5,  [1000]*28+[500]*5,  TestBeds.WALL2),
-   ([4]*28+[10]*5,  [1000]*28+[500]*5,  TestBeds.WALL2),
-   ([4]*28+[10]*5,  [1000]*28+[500]*5,  TestBeds.WALL2),
-   ([4]*28+[10]*5,  [1000]*28+[500]*5,  TestBeds.WALL2),
-   ([10]*28+[4]*5,  [500]*28+[1000]*5,  TestBeds.CITY),
-   ([10]*28+[4]*5,  [500]*28+[1000]*5,  TestBeds.CITY),
-   ([10]*28+[4]*5,  [500]*28+[1000]*5,  TestBeds.CITY),
-   ([10]*28+[4]*5,  [500]*28+[1000]*5,  TestBeds.CITY),
-   ([10]*28+[4]*5,  [500]*28+[1000]*5,  TestBeds.CITY),
-]
+# matrix = [ # 28+5, diagonals are ignored
+#    ([4]*28+[10]*5,  [1000]*28+[500]*5,  TestBeds.WALL2),
+#    ([4]*28+[10]*5,  [1000]*28+[500]*5,  TestBeds.WALL2),
+#    ([4]*28+[10]*5,  [1000]*28+[500]*5,  TestBeds.WALL2),
+#    ([4]*28+[10]*5,  [1000]*28+[500]*5,  TestBeds.WALL2),
+#    ([4]*28+[10]*5,  [1000]*28+[500]*5,  TestBeds.WALL2),
+#    ([4]*28+[10]*5,  [1000]*28+[500]*5,  TestBeds.WALL2),
+#    ([4]*28+[10]*5,  [1000]*28+[500]*5,  TestBeds.WALL2),
+#    ([4]*28+[10]*5,  [1000]*28+[500]*5,  TestBeds.WALL2),
+#    ([4]*28+[10]*5,  [1000]*28+[500]*5,  TestBeds.WALL2),
+#    ([4]*28+[10]*5,  [1000]*28+[500]*5,  TestBeds.WALL2),
+#    ([4]*28+[10]*5,  [1000]*28+[500]*5,  TestBeds.WALL2),
+#    ([4]*28+[10]*5,  [1000]*28+[500]*5,  TestBeds.WALL2),
+#    ([4]*28+[10]*5,  [1000]*28+[500]*5,  TestBeds.WALL2),
+#    ([4]*28+[10]*5,  [1000]*28+[500]*5,  TestBeds.WALL2),
+#    ([4]*28+[10]*5,  [1000]*28+[500]*5,  TestBeds.WALL2),
+#    ([4]*28+[10]*5,  [1000]*28+[500]*5,  TestBeds.WALL2),
+#    ([4]*28+[10]*5,  [1000]*28+[500]*5,  TestBeds.WALL2),
+#    ([4]*28+[10]*5,  [1000]*28+[500]*5,  TestBeds.WALL2),
+#    ([4]*28+[10]*5,  [1000]*28+[500]*5,  TestBeds.WALL2),
+#    ([4]*28+[10]*5,  [1000]*28+[500]*5,  TestBeds.WALL2),
+#    ([4]*28+[10]*5,  [1000]*28+[500]*5,  TestBeds.WALL2),
+#    ([4]*28+[10]*5,  [1000]*28+[500]*5,  TestBeds.WALL2),
+#    ([4]*28+[10]*5,  [1000]*28+[500]*5,  TestBeds.WALL2),
+#    ([4]*28+[10]*5,  [1000]*28+[500]*5,  TestBeds.WALL2),
+#    ([4]*28+[10]*5,  [1000]*28+[500]*5,  TestBeds.WALL2),
+#    ([4]*28+[10]*5,  [1000]*28+[500]*5,  TestBeds.WALL2),
+#    ([4]*28+[10]*5,  [1000]*28+[500]*5,  TestBeds.WALL2),
+#    ([4]*28+[10]*5,  [1000]*28+[500]*5,  TestBeds.WALL2),
+#    ([10]*28+[4]*5,  [500]*28+[1000]*5,  TestBeds.CITY),
+#    ([10]*28+[4]*5,  [500]*28+[1000]*5,  TestBeds.CITY),
+#    ([10]*28+[4]*5,  [500]*28+[1000]*5,  TestBeds.CITY),
+#    ([10]*28+[4]*5,  [500]*28+[1000]*5,  TestBeds.CITY),
+#    ([10]*28+[4]*5,  [500]*28+[1000]*5,  TestBeds.CITY),
+# ]
 
 spec = Spec()
 

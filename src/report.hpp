@@ -159,6 +159,11 @@ public:
     rapidjson::Value* getJson();
 
     /**
+     * get the json node of this message
+    */
+    std::string getString();
+
+    /**
      * set the hardware test
      * @param hardware the hardware test
     */

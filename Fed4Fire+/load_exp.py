@@ -16,7 +16,7 @@ except:
 with open(sys.argv[1], 'r') as rd:
    spec = json.load(rd)
 
-removes = [] # instert here the list of nodes that failed to run (e.g. "node31")
+removes = ["node28","node17"] # instert here the list of nodes that failed to run (e.g. "node31")
 
 for remove in removes:
    del spec["nodes"][remove]

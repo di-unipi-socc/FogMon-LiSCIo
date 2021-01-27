@@ -1,5 +1,10 @@
 #include "report.hpp"
 
+#include "rapidjson/reader.h"
+#include "rapidjson/document.h"
+#include "rapidjson/writer.h"
+#include "rapidjson/stringbuffer.h"
+
 using namespace rapidjson;
 using namespace std;
 
@@ -427,4 +432,12 @@ bool Report::getReports(std::vector<report_result> &reports) {
     }
 
     return true;
+}
+
+string Report::getString() {
+    StringBuffer s;
+    rapidjson::Writer<StringBuffer> writer (s);
+    doc.Accept (writer);
+    std::string str (s.GetString());
+    return str;
 }

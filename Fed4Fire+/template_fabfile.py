@@ -22,6 +22,13 @@ images = [
     "diunipisocc/liscio-fogmon:valgrind"
 ]
 
+githubFogmon = [
+    "git clone https://github.com/di-unipi-socc/FogMon-LiSCIo",
+    "(cd FogMon-LiSCIo && git submodule init)",
+    "(cd FogMon-LiSCIo && git submodule update)",
+    "(cd FogMon-LiSCIo && sudo ./build.sh)"
+]
+
 docker = [
     'sudo service ntp stop',
     'sudo ntpdate pool.ntp.org',
@@ -178,9 +185,9 @@ def setupNetwork(ctx):
                     if "latency" in v:
                         latency = v["latency"]
                         if not v["same_testbed"]:
-                            latency -=3
+                            latency -=4
                         elif v["testbed"] == TestBeds.CITY.value:
-                            latency -=2
+                            latency -=3
                         latency = latency//2
                         command+= f"delay {latency}ms "
                     if "capacity" in v:
@@ -244,17 +251,15 @@ def setupDocker(ctx):
     staging(ctx)
     spec = ctx.SPEC
     for conn in ctx.CONNS:
-        for n,v in spec["nodes"].items():
-            if n == conn.original_host:
-                file = "/tmp/script621f37ffa.sh"
-                conn.run(f"> {file}")
-                print(f"created {file}")
-                conn.run(f"chmod +x {file}")
-                line = ""
-                for comm in docker:
-                    line += f"{comm}\n"
-                conn.run(f'echo \'{line}\' >> {file}')
-                conn.run(f"screen -d -m -S docker bash -c '{file}'")
+        file = "/tmp/script621f37ffa.sh"
+        conn.run(f"> {file}")
+        print(f"created {file}")
+        conn.run(f"chmod +x {file}")
+        line = ""
+        for comm in docker:
+            line += f"{comm}\n"
+        conn.run(f'echo \'{line}\' >> {file}')
+        conn.run(f"screen -d -m -S docker bash -c '{file}'")
 
 @task
 def setupVbox(ctx):
@@ -281,6 +286,20 @@ def pullFogmon(ctx):
             i+=1
         print(conn.original_host)
 
+@task
+def buildFogmon(ctx):
+    staging(ctx)
+    for conn in ctx.CONNS:
+        file = "/tmp/script621f3765a.sh"
+        conn.run(f"> {file}")
+        print(f"created {file}")
+        conn.run(f"chmod +x {file}")
+        line = ""
+        for comm in githubFogmon:
+            line += f"{comm}\n"
+        conn.run(f'echo \'{line}\' >> {file}')
+        conn.run(f"screen -d -m -S githubFogmon bash -c '{file}'")
+        print(conn.original_host)
 
 @task
 def startFogmon(ctx):
@@ -289,11 +308,11 @@ def startFogmon(ctx):
     for conn in ctx.CONNS:
         if leader is None:
             # sudo docker run -it --net=host diunipisocc/liscio-fogmon:test --leader
-            conn.run(f"screen -d -m -S fogmon bash -c 'sudo docker run -it --net=host {images[0]} --leader'")
+            conn.run(f"screen -d -m -S fogmon bash -c 'sudo docker run -it --net=host {images[0]} --leader > log.txt'")
             leader = conn.original_host
         else:
             # sudo docker run -it --net=host diunipisocc/liscio-fogmon:test -C node0
-            conn.run(f"screen -d -m -S fogmon bash -c 'sudo docker run -it --net=host {images[0]} -C {leader}'")
+            conn.run(f"screen -d -m -S fogmon bash -c 'sudo docker run -it --net=host {images[0]} -C {leader} > log.txt'")
         print(conn.original_host)
 
 @task
