@@ -59,10 +59,10 @@ void Leader::start(vector<Message::node> mNodes) {
             res = this->connections->sendMHello(l);
             if(res)
                 i=5;
-            sleeper.sleepFor(chrono::seconds(3));
+            sleeper.sleepFor(chrono::seconds(10));
         }
         if(!res) {
-            fprintf(stderr,"cannot connect to the network1\n");
+            fprintf(stderr,"cannot connect to the network2 (%s)\n",l.ip.c_str());
             continue;
         }
         valid = true;
@@ -84,10 +84,10 @@ void Leader::start(vector<Message::node> mNodes) {
             res = this->connections->sendMHello(ip);
             if(res)
                 i=5;
-            sleeper.sleepFor(chrono::seconds(3));
+            sleeper.sleepFor(chrono::seconds(10));
         }
         if(!res) {
-            fprintf(stderr,"cannot connect to the network2\n");
+            fprintf(stderr,"cannot connect to the network2 (%s)\n",ip.ip.c_str());
         }
     }
 
@@ -227,7 +227,10 @@ void Leader::changeRole(vector<Message::node> leaders) {
             if(ip.id == this->getMyNode().id)
                 continue;
             if(!this->connections->sendMHello(ip)) {
-                fprintf(stderr,"cannot connect to all the other leaders (%s)\n",ip.ip.c_str());
+                sleeper.sleepFor(chrono::seconds(10));
+                if(!this->connections->sendMHello(ip)) {
+                    fprintf(stderr,"cannot connect to all the other leaders (%s)\n",ip.ip.c_str());
+                }
             }
         }
     }
