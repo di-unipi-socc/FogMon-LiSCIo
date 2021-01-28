@@ -7,8 +7,8 @@ from topology import Topology
 import random
 
 topology = Topology()
-topology.create_tree(6,[2,4,4,3,4,1],[(10,20),(1,5),(1,5),(1,40),(1,10)])
-
+topology.create_tree(6,[2,3,2,3,2,1],([(10,20),(1,5),(1,10),(1,30),(1,10)],[(70000,200000),(50000,100000),(10000,100000),(10000,100000),(10,100000)]))
+    
 cloud_high = random.sample(topology.return_level(2),  3) # Central cloud         3
 cloud_low = random.sample(topology.return_level(3),   5) # Decentralised cloud   5
 isp = random.sample(topology.return_level(4),         12) # ISP                   12
@@ -21,8 +21,8 @@ M = topology.matrix(selected)
 
 matrix = []
 for i in selected:
-   latencies = [M[i][j] for j in selected]
-   uploads = [100000//M[i][j] if i!=j and M[i][j]!=0 else 0 for j in selected] # TODO add better values
+   latencies = [M[0][i][j] for j in selected]
+   uploads = [M[1][i][j] for j in selected]
    testbed = TestBeds.WALL2 if i not in home else TestBeds.CITY
    matrix.append((latencies,uploads,testbed))
 # the first and second matrix must be symmetric, the first represent the latency, the other represent the upload of every node against another
