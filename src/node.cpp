@@ -18,6 +18,7 @@ Node::Node(string port, bool isLeader, int threads) {
 
     this->timePropagation = 20;
     this->timeheartbeat = 120;
+    this->interfaceIp = "";
 
     this->isLeader = isLeader;
     this->agent = NULL;
