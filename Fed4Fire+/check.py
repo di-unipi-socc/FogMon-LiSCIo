@@ -1,125 +1,83 @@
 #!/usr/bin/env python3
-from pyclustering.cluster.kmedoids import kmedoids
-from pyclustering.cluster import cluster_visualizer
-from pyclustering.utils import read_sample
-from pyclustering.samples.definitions import FCPS_SAMPLES
-import random
-import math
-import sqlite3
-
-def avg_dist(matrix,cluster,medoid):
-    m = 0
-    for i in cluster:
-        if i==medoid:
-            continue
-        m+= matrix[i][medoid]
-    if len(cluster)==1:
-        return 0
-    return m/(len(cluster)-1)
-
-def quality(matrix,clusters,medoids):
-    v = 0
-    avgs = [avg_dist(matrix,clusters[i],medoids[i]) for i in range(len(medoids))]
-    for i in range(len(medoids)):
-        m = 0
-        for j in range(len(medoids)):
-            if i==j:
-                continue
-            m2 = (avgs[i]+avgs[j])/matrix[medoids[i]][medoids[j]]
-            if m < m2:
-                m = m2
-        v += m
-    return v/len(medoids)
-
-class Clusterer:
-    def __init__(self, Ls,Ns, Links):
-        self.Nodes = Ns
-        self.Leaders = Ls
-
-        self.N = len(self.Nodes)
-        self.L = len(self.Leaders)
-
-        self.D = {}
-        for i in range(self.N):
-            self.D[self.Nodes[i]]=i
-
-        self.A = [[Links[i][j] for j in self.Nodes] for i in self.Nodes]
-
-        k = int(math.sqrt(self.N))
-        # Set random initial medoids. considering the already selected leaders
-        if self.L<k:
-            sample = []
-            for i in range(len(self.A)):
-                if i not in [self.D[i] for i in self.Leaders]:
-                    sample.append(i)
-            self.initial_medoids = [self.D[i] for i in self.Leaders] + random.sample(sample,k=k-self.L)
-        elif self.L==k:
-            self.initial_medoids = [self.D[i] for i in self.Leaders]
-        else:
-            self.initial_medoids = random.sample([self.D[i] for i in self.Leaders],k=k)
-
-    def cluster(self):
-
-        # create K-Medoids algorithm for processing distance matrix instead of points
-        kmedoids_instance = kmedoids(self.A, self.initial_medoids, data_type='distance_matrix')
-        # run cluster analysis and obtain results
-        kmedoids_instance.process()
-        medoids = kmedoids_instance.get_medoids()
-        clusters = kmedoids_instance.get_clusters()
-        q = quality(self.A,clusters,medoids)
-
-
-
-        new_leaders = []
-
-        for i in self.D:
-            if self.D[i] in medoids:
-                new_leaders.append(i)
-        
-        changes = 0
-
-        for i in new_leaders:
-            if i not in self.Leaders:
-                changes+=1
-
-        data = {
-            "quality": q,
-            "new_leaders": new_leaders,
-            "changes": changes
-            }
-
-        return data
-
+from clusterer import Clusterer
+import json
+import requests
 
 if __name__ == "__main__":
-    import json
 
-    print("Number of leaders? (then 1 leader per line)")
-    L = int(input())
-    Leaders = []
-    for _ in range(L):
-        Leaders.append(input().replace("\n",""))
+    print("Download anew?")
+    r = input()
+    if r.lower() in ["y","yes"]:
+        r = requests.get("http://131.114.72.76/data")
+        data = r.json()["data"]
+        with open("fogmon.json","w") as wr:
+            json.dump(data,wr)
+    else:
+        with open("fogmon.json", 'r') as rd:
+            data = json.load(rd)
 
+    Leaders = data["Leaders"]["packet"]["data"]["selected"]
+    Leaders = [l["ip"] for l in Leaders]
+    L = len(Leaders)
+    print(data["Reports"])
+    print(Leaders)
+    print(L)
+    q_fogmon = data["Leaders"]["packet"]["data"]["cost"]
     with open("spec.json", 'r') as rd:
         spec = json.load(rd)
     
     Nodes = [k for k,v in spec["nodes"].items()]
 
-    Links = {}
+    Links = {"L":{},"B":{}}
     for i in Nodes:
-        Links[i] = {}
+        Links["L"][i] = {}
+        Links["B"][i] = {}
         for j in Nodes:
-            Links[i][j] = 0
+            Links["L"][i][j] = 0
+            Links["B"][i][j] = 0
 
     for l,v in spec["links"].items():
         n1 = v["interfaces"][0].split(":")[0]
         n2 = v["interfaces"][1].split(":")[0]
         try:
-            Links[n1][n2] = v["latency"]
-            Links[n2][n1] = v["latency"]
+            Links["L"][n1][n2] = v["latency"]
+            Links["L"][n2][n1] = v["latency"]
+            Links["B"][n1][n2] = v["capacity"]
+            Links["B"][n2][n1] = v["capacity"]
         except:
-            Links[n1][n2] = 0
+            raise Exception("Some links are missing")
 
+    # computing accuracy
+    def get_node(node):
+        return node["ip"]
+    def accuracy_tests(tests, Links):
+        rows = []
+        for test in tests:
+            n2 = get_node(test["target"])
+            rows.append((test["mean"],test["variance"],Links[n2]))
+        return rows
+    
+    rows_intra = []
+    rows_inter = []
+    for packet in data["Reports"]:
+        print("Node:",packet["sender"])
+        for report in packet["data"]["reports"]:
+            if report["leader"] == packet["sender"]["id"]:
+                rows = rows_intra
+            else:
+                rows = rows_inter
+            print("Source:",report["source"],report["leader"])
+            n1 = report["source"]["ip"]
+            rows += accuracy_tests(report["latency"],Links["L"][n1])
+            rows += accuracy_tests(report["bandwidht"],Links["B"][n1])
+    import csv
+    with open("links.csv", 'w') as csvfile:
+        csvfile.writerow(["intralink"])
+        csvfile.writerows(rows_intra)
+        csvfile.writerow(["interlink"])
+        csvfile.writerows(rows_inter)
+
+    # computing cluster goodness
     probs = {}
     for i in Nodes:
         probs[i] = 0
@@ -131,20 +89,12 @@ if __name__ == "__main__":
 
     Num = 10000
     for _ in range(Num):
-        clusterer = Clusterer([Nodes[0]],Nodes,Links)
+        clusterer = Clusterer([Nodes[0]],Nodes,Links["L"])
         
         data = clusterer.cluster()
         
-        if len(data["new_leaders"]) != len(Leaders):
+        if len(data["new_leaders"]) != L:
             raise Exception("Wrong number of leaders!!!")
-        inside = True
-        for l in Leaders:
-            if l not in data["new_leaders"]:
-                inside = False
-                break
-        if inside:
-            print("Configuration is OK!!!")
-            break
         
         #qual[tuple(data["new_leaders"])] = data["quality"]
 
@@ -160,7 +110,10 @@ if __name__ == "__main__":
     for i in probs:
         probs[i] /= Num
     
-    print(q_max,q_min)
+
+    q = (q_fogmon-q_min)/(q_max-q_min)
+    print(q)
+    print(q_max,q_fogmon,q_min)
 
     
     probs = {k: v for k, v in sorted(probs.items(), key=lambda item: item[1], reverse=True) if v != 0}

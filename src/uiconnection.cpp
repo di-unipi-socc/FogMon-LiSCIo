@@ -6,8 +6,9 @@
 
 using namespace std;
 
-UIConnection::UIConnection(string ip) {
+UIConnection::UIConnection(Message::node myNode, string ip) {
     this->ip = ip;
+    this->myNode = myNode;
 }
 
 UIConnection::~UIConnection() {
@@ -35,23 +36,39 @@ bool sendToInterface(string ip,string str) {
         curl_easy_setopt(curl, CURLOPT_POSTFIELDS, str.c_str());
         res = curl_easy_perform(curl);
         curl_easy_cleanup(curl);
-
         std::cout << readBuffer << std::endl;
     }
 }
 
-bool UIConnection::sendTopology(vector<Report::report_result> report) {
+bool UIConnection::sendTopology(vector<Report::report_result> report) {   
     if(this->ip != "") {
+        Message m;
+        m.setSender(myNode);
+        m.setType((Message::Type)0);
+        m.setCommand((Message::Command)0);
+        m.setArgument((Message::Argument)0);
+
         Report r;
         r.setReports(report);
-        return sendToInterface(this->ip,r.getString());
+
+        m.setData(r);
+        m.buildString();
+        return sendToInterface(this->ip,m.getString());
     }
     return false;
 }
 
 bool UIConnection::sendChangeRole(Message::leader_update update) {
     if(this->ip != "") {
-        return sendToInterface(this->ip,update.getString());
+        Message m;
+        m.setSender(myNode);
+        m.setType((Message::Type)1);
+        m.setCommand((Message::Command)0);
+        m.setArgument((Message::Argument)0);
+
+        m.setData(update);
+        m.buildString();
+        return sendToInterface(this->ip,m.getString());
     }
     return false;
 }

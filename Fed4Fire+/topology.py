@@ -136,7 +136,7 @@ if __name__ == "__main__":
     import networkx as nx
     import pydot
     from networkx.drawing.nx_pydot import graphviz_layout
-    from check import Clusterer
+    from clusterer import Clusterer
 
     topology = Topology()
     topology.create_tree(6,[2,3,2,3,2,1],([(10,20),(1,5),(1,10),(1,30),(1,10)],[(70000,200000),(50000,100000),(10000,100000),(10000,100000),(10,100000)]))

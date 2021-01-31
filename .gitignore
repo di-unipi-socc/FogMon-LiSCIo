@@ -10,9 +10,9 @@ tests/CTestTestfile.cmake
 tests/UnitTests
 .vscode
 build
-spec.json
 Fed4Fire+/*.zip
 Fed4Fire+/*.xml
 Fed4Fire+/logs
+Fed4Fire+/*.json
 __pycache__/
 *.pyc

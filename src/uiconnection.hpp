@@ -9,13 +9,14 @@
 class UIConnection {
 
 public:
-    UIConnection(std::string ip = "");
+    UIConnection(Message::node myNode, std::string ip = "");
     ~UIConnection();
 
     bool sendTopology(std::vector<Report::report_result> report);
     bool sendChangeRole(Message::leader_update update);
 private:
     std::string ip;
+    Message::node myNode;
 };
 
 #endif
