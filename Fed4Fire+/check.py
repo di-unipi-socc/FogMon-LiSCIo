@@ -57,25 +57,41 @@ if __name__ == "__main__":
             rows.append((test["mean"],test["variance"],Links[n2]))
         return rows
     
-    rows_intra = []
-    rows_inter = []
+    rows_intra = {}
+    rows_inter = {}
     for packet in data["Reports"]:
+        rows_intra[get_node(packet["sender"])] = {"L":[],"B":[]}
+        rows_inter[get_node(packet["sender"])] = {"L":[],"B":[]}
         print("Node:",packet["sender"])
         for report in packet["data"]["reports"]:
             if report["leader"] == packet["sender"]["id"]:
-                rows = rows_intra
+                rows = rows_intra[get_node(packet["sender"])]
             else:
-                rows = rows_inter
+                rows = rows_inter[get_node(packet["sender"])]
             print("Source:",report["source"],report["leader"])
             n1 = report["source"]["ip"]
-            rows += accuracy_tests(report["latency"],Links["L"][n1])
-            rows += accuracy_tests(report["bandwidht"],Links["B"][n1])
+            rows["L"] += accuracy_tests(report["latency"],Links["L"][n1])
+            rows["B"] += accuracy_tests(report["bandwidht"],Links["B"][n1])
     import csv
     with open("links.csv", 'w') as csvfile:
         csvfile.writerow(["intralink"])
-        csvfile.writerows(rows_intra)
+        csvfile.writerow(["latency"])
+        for k,v in rows_intra:
+            csvfile.writerow([k])
+            csvfile.writerows(v["L"])
+        csvfile.writerow(["bandwidth"])
+        for k,v in rows_intra:
+            csvfile.writerow([k])
+            csvfile.writerows(v["B"])
         csvfile.writerow(["interlink"])
-        csvfile.writerows(rows_inter)
+        csvfile.writerow(["latency"])
+        for k,v in rows_inter:
+            csvfile.writerow([k])
+            csvfile.writerows(v["L"])
+        csvfile.writerow(["bandwidth"])
+        for k,v in rows_inter:
+            csvfile.writerow([k])
+            csvfile.writerows(v["B"])
 
     # computing cluster goodness
     probs = {}

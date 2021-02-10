@@ -4,3 +4,5 @@ fixed recv and write for errno == EINPROGRESS.
 fixed bugs on leader crash.
 fixed bugs on gossiping protocol.
 added valgrind version for debug of crashes.
+
+Added interface service

@@ -2,6 +2,8 @@
 import random
 import math
 
+random.seed(0) #TODO: change seed
+
 class Node:
     def __init__(self,id):
         self.id = id
