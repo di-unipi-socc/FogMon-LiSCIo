@@ -15,7 +15,7 @@ services:
       MONGODB_DATABASE: flaskdb
       MONGODB_HOSTNAME: mongodb
     volumes:
-      - appdata:/var/www
+      - appdata:/var/www/
     depends_on:
       - mongodb
     networks:
@@ -39,7 +39,7 @@ services:
   webserver:
     build:
       context: nginx
-      dockerfile: Dockerfile
+      dockerfile: ./Dockerfile
     image: digitalocean.com/webserver:latest
     container_name: webserver
     restart: unless-stopped

@@ -154,7 +154,7 @@ void Leader::timerFun() {
             this->getStorage()->complete();
             {
                 vector<Report::report_result> report = this->getStorage()->getReport();
-                UIConnection conn(this->getMyNode(),this->node->interfaceIp);
+                UIConnection conn(this->getMyNode(),this->node->interfaceIp, this->node->session);
                 conn.sendTopology(report);
             }
 

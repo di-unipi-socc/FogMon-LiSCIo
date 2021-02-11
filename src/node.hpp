@@ -48,6 +48,7 @@ public:
     int timePropagation;
 
     std::string interfaceIp;
+    int session;
 
 protected:
     IAgent * agent;

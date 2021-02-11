@@ -1,0 +1,26 @@
+{% extends "layout.html" %}
+{% block title %}Testbeds{% endblock %}
+{% set active_page = "testbeds" %}
+{% block content %}
+<div class="container">
+    <h2> Running Containers Found: 3</h2> <br>
+    <table id="sessions" class="table">
+        <thead>
+        <tr>
+            <th>Session id</th>
+            <th>Last Update</th>
+            <th>Logs</th>
+        </tr>
+        </thead>
+{% for r in data %}
+        <tbody>
+            <tr>
+                <td>{{r.id}}</td>
+                <td>{{r.date}}</td>
+                <td>{{r.num}}</td>
+            </tr>
+        </tbody>
+{% endfor %}
+    </table>
+</div>
+{% endblock %}

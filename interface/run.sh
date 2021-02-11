@@ -13,6 +13,8 @@ case "$1" in
     *)
         docker-compose build
         docker-compose down
+        docker-compose -f docker-compose-cleanup.yml down -v
         docker-compose up -d
+        docker-compose logs -f
         ;;
 esac

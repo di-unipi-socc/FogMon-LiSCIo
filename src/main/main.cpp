@@ -33,7 +33,7 @@ int main(int argc, char *argv[]) {
         cout << "-P             port        port to connect" <<endl;
         cout << "--my-port      port        listening port" <<endl;
         cout << "-i             ip          ip of the interface"<<endl;
-        cout <<endl<< "there are other for timing" <<endl;
+        cout <<endl<< "there are other for timings" <<endl;
         return 0;
     }
      
@@ -74,6 +74,7 @@ int main(int argc, char *argv[]) {
     bool leader = false;
     
     std::string interfaceIp = "";
+    int session = 0;
 
     if(input.cmdOptionExists("--time-report"))
         time_report = stoi(input.getCmdOption("--time-report"));
@@ -101,6 +102,9 @@ int main(int argc, char *argv[]) {
 
     if(input.cmdOptionExists("-i"))
         interfaceIp = input.getCmdOption("-i");
+    
+    if(input.cmdOptionExists("-s"))
+        session = stoi(input.getCmdOption("-s"));
 
 
     Node node(myPort, leader, threads);
@@ -123,7 +127,7 @@ int main(int argc, char *argv[]) {
     node.setParam(string("max-per-bandwidth"), max_bandwidth);
     node.setParam(string("leader-check"), leaderCheck);
     node.setParam(string("interface"), interfaceIp);
-
+    node.setParam(string("session"), session);
     node.start();
 
     int a = -1;

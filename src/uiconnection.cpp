@@ -6,9 +6,10 @@
 
 using namespace std;
 
-UIConnection::UIConnection(Message::node myNode, string ip) {
+UIConnection::UIConnection(Message::node myNode, string ip, int session) {
     this->ip = ip;
     this->myNode = myNode;
+    this->session = session;
 }
 
 UIConnection::~UIConnection() {
@@ -46,7 +47,7 @@ bool UIConnection::sendTopology(vector<Report::report_result> report) {
         m.setSender(myNode);
         m.setType((Message::Type)0);
         m.setCommand((Message::Command)0);
-        m.setArgument((Message::Argument)0);
+        m.setArgument((Message::Argument)this->session);
 
         Report r;
         r.setReports(report);
@@ -64,7 +65,7 @@ bool UIConnection::sendChangeRole(Message::leader_update update) {
         m.setSender(myNode);
         m.setType((Message::Type)1);
         m.setCommand((Message::Command)0);
-        m.setArgument((Message::Argument)0);
+        m.setArgument((Message::Argument)this->session);
 
         m.setData(update);
         m.buildString();

@@ -1,8 +1,11 @@
 import os
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, render_template
 from flask_pymongo import PyMongo
 
 from datetime import datetime
+import logging
+
+logging.basicConfig(level=logging.INFO)
 
 application = Flask(__name__)
 
@@ -11,41 +14,49 @@ application.config["MONGO_URI"] = 'mongodb://' + os.environ['MONGODB_HOSTNAME'] 
 mongo = PyMongo(application)
 db = mongo.db
 
+from utils.session import unify_reports, get_sessions, get_session, save_update, save_report
+
 @application.route('/')
 def index():
+    return render_template('index.html')
+
+@application.route('/testbeds.html')
+def testbeds():
+    data = get_testbeds().json["data"]
+    logging.info(data)
+    return render_template('testbeds.html', r = data)
+
+
+
+@application.route('/testbed')
+def get_testbeds():
+    data = get_sessions()
     return jsonify(
         status=True,
-        message='Welcome to the Dockerized Flask MongoDB app!'
+        data=data,
     )
 
-
-@application.route('/data')
-def get_info():
-    updates = db.update.find().sort([("datetime", -1)]).limit(1)
-    item = {}
-    data = []
-    for update in updates:
-        item = {
-            'id': str(update['_id']),
-            'data': update['data'],
-            'date': update['datetime']
-        }
-        data.append(item)
+@application.route('/testbed/<int:session>')
+def get_testbed(session):
+    print("session",session, flush=True)
+    data = get_session(session)
 
     return jsonify(
         status=True,
         data=data,
-        num=len(data)
     )
 
 @application.route('/data', methods=['POST'])
-def sendUpdate():
+def post_data():
     data = request.get_json(force=True)
-    item = {
-        'data': data,
-        'datetime': datetime.utcnow()
-    }
-    db.update.insert_one(item)
+    
+    try:
+        if data["type"] == 0:
+            save_report(data)
+        elif data["type"] == 1:
+            save_update(data)
+    except:
+        pass
 
     return jsonify(
         status=True,
