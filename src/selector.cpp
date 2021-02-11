@@ -323,7 +323,7 @@ void Selector::startSelection() {
             this->parent->changeRoles(sel);
             printf("ended selection\n");
             {
-                UIConnection conn(this->parent->getMyNode(),this->parent->node->interfaceIp, , this->parent->node->session);
+                UIConnection conn(this->parent->getMyNode(),this->parent->node->interfaceIp, this->parent->node->session);
                 conn.sendChangeRole(sel);
             }
         });

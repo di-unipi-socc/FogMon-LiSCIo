@@ -9,7 +9,7 @@
 class UIConnection {
 
 public:
-    UIConnection(Message::node myNode, std::string ip = "", int session);
+    UIConnection(Message::node myNode, std::string ip = "", int session = 0);
     ~UIConnection();
 
     bool sendTopology(std::vector<Report::report_result> report);
