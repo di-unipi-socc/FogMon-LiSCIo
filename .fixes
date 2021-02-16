@@ -6,3 +6,9 @@ fixed bugs on gossiping protocol.
 added valgrind version for debug of crashes.
 
 Added interface service
+
+bug 0 bandwidth detected?
+possible improvment, change of follower association method
+multithread of tests
+mean of tests in follower (20 too many not reactive?)
+timeheartbeat = reportTime? modify accordigly

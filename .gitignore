@@ -10,6 +10,7 @@ tests/CTestTestfile.cmake
 tests/UnitTests
 .vscode
 build
+tmp
 Fed4Fire+/*.zip
 Fed4Fire+/*.xml
 Fed4Fire+/logs

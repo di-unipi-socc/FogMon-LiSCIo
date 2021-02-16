@@ -3,6 +3,7 @@ import sys
 import os
 from zipfile import ZipFile
 import json
+import requests
 
 if len(sys.argv)!=3:
    print("use: script.py spec.json filezip.zip")
@@ -16,7 +17,7 @@ except:
 with open(sys.argv[1], 'r') as rd:
    spec = json.load(rd)
 
-removes = ["node28","node17"] # instert here the list of nodes that failed to run (e.g. "node31")
+removes = []#["node28","node17"] # instert here the list of nodes that failed to run (e.g. "node31")
 
 for remove in removes:
    del spec["nodes"][remove]
@@ -40,6 +41,14 @@ with open("template_fabfile.py","r") as rd:
          wr.write(line)
 
 os.system("chmod 600 build/id_rsa")
+
+r = requests.post("http://131.114.72.76:8248/testbed", json=spec)
+if r.status_code == 201:
+   session = r.json()["session"]
+   spec["session"] = session
+   print("session",session)
+else:
+   print("error")
 
 with open("build/spec.json","w") as wr:
    json.dump(spec, wr)
