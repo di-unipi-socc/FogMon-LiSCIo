@@ -147,7 +147,7 @@ TEST(StorageTest, SaveState) {
     Storage storage;
     storage.open("testA.db");
 
-    storage.saveState();
+    storage.saveState(0,10);
     //TODO test if correct
 }
 

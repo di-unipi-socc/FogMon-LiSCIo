@@ -68,8 +68,12 @@ int main(int argc, char *argv[]) {
     int time_latency = 30;
     int max_latency = 100;
     int time_bandwidth = 600;
-    int max_bandwidth=1;
-    int leaderCheck = 10;
+    int max_bandwidth = 3;
+    int leader_check = 8;
+    
+    int test_window = 20;
+    int sesibility = 10;
+    int leader_formula = 0;
 
     bool leader = false;
     
@@ -95,7 +99,16 @@ int main(int argc, char *argv[]) {
         time_bandwidth = stoi(input.getCmdOption("--max-per-bandwidth"));
 
     if(input.cmdOptionExists("--leader-check"))
-        leaderCheck = stoi(input.getCmdOption("--leader-check"));
+        leader_check = stoi(input.getCmdOption("--leader-check"));
+
+    if(input.cmdOptionExists("--test-window"))
+        test_window = stoi(input.getCmdOption("--test-window"));
+    
+    if(input.cmdOptionExists("--sesibility"))
+        sesibility = stoi(input.getCmdOption("--sesibility"));
+    
+    if(input.cmdOptionExists("--leader-formula"))
+        leader_formula = stoi(input.getCmdOption("--leader-formula"));
 
     if(input.cmdOptionExists("--leader"))
         leader = true;
@@ -125,7 +138,12 @@ int main(int argc, char *argv[]) {
     node.setParam(string("max-per-latency"), max_latency);
     node.setParam(string("time-bandwidth"), time_bandwidth);
     node.setParam(string("max-per-bandwidth"), max_bandwidth);
-    node.setParam(string("leader-check"), leaderCheck);
+    node.setParam(string("leader-check"), leader_check);
+
+    node.setParam(string("test-window"), test_window);
+    node.setParam(string("sesibility"), sesibility);
+    node.setParam(string("leader-formula"), leader_formula);
+
     node.setParam(string("interface"), interfaceIp);
     node.setParam(string("session"), session);
     node.start();

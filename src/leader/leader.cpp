@@ -141,24 +141,25 @@ void Leader::timerFun() {
             vector<Report::report_result> report = this->getStorage()->getReport();
             if(this->connections->sendMReport(ips[i], report)) {
                 sent++;
+                printf("Sending to Leader: %s\n",ips[i].ip.c_str());
             }
             i++;
         }
 
-        if(iter % 10 == 0) { // every n cycles check what to delete
+        if(iter % 1 == 0) { // every n cycles check what to delete
             this->getStorage()->removeOldLNodes(this->node->timePropagation*(log2(ips.size())+2)); // remove old leaders that do not update in a logarithmic time
             this->getStorage()->removeOldNodes(this->node->timeheartbeat*3); // remove followers that do not update in 3 heartbeat time
         }
         
-        if(iter % 5 == 0) {
+        if(iter % 4 == 0) {
             this->getStorage()->complete();
             {
                 vector<Report::report_result> report = this->getStorage()->getReport();
                 UIConnection conn(this->getMyNode(),this->node->interfaceIp, this->node->session);
                 conn.sendTopology(report);
             }
-
-            this->selector.checkSelection();
+            if(iter % 12 == 0)
+                this->selector.checkSelection();
         }
 
         iter++;
@@ -215,6 +216,7 @@ void Leader::changeRole(vector<Message::node> leaders) {
             printf("      %s %s %s\n",node.id.c_str(), node.ip.c_str(), node.port.c_str());
         }
     }
+    this->storage->removeChangeRole(leaders);
     if(!present) {
         this->node->setMNodes(leaders);
         this->node->demote();

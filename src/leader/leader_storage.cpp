@@ -22,6 +22,7 @@ void LeaderStorage::createTables() {
                             "CREATE TABLE IF NOT EXISTS MNodes (id STRING PRIMARY KEY, ip STRING NOT NULL, port STRING NOT NULL, cores INTEGER, mean_free_cpu REAL, var_free_cpu REAL, memory INTEGER, mean_free_memory FLOAT, var_free_memory FLOAT, disk INTEGER, mean_free_disk FLOAT, var_free_disk FLOAT, lasttime TIMESTAMP, monitoredBy STRING REFERENCES MMNodes(id) NOT NULL, UNIQUE(ip, port))",
                             "CREATE TABLE IF NOT EXISTS MLinks (idA STRING REFERENCES MNodes(id) NOT NULL, idB STRING REFERENCES MNodes(id) NOT NULL, meanL FLOAT, varianceL FLOAT, lasttimeL TIMESTAMP, meanB FLOAT, varianceB FLOAT, lasttimeB TIMESTAMP, PRIMARY KEY(idA,idB))",
                             "CREATE TABLE IF NOT EXISTS MIots (id STRING PRIMARY KEY, desc STRING, ms INTEGER, idNode STRING REFERENCES MNodes(id) NOT NULL)",
+                            "DELETE FROM MMNodes",
                             string("INSERT OR IGNORE INTO MMNodes (id, ip, port) VALUES (\"")+ this->nodeM.id+ string("\", \"::1\", \""+ this->nodeM.port +"\")")};
     
     for(string str : query) {
@@ -103,6 +104,7 @@ vector<Message::node> LeaderStorage::getNodes() {
 void LeaderStorage::addTest(Message::node nodeA, Message::node nodeB, Report::test_result test, string type) {
     char *zErrMsg = 0;
     char buf[2048];
+    //printf("Saving: %s %s %s %f\n",nodeA.ip.c_str(),nodeB.ip.c_str(),type.c_str(),test.mean);
     if(type == string("Latency")) {
         std::sprintf(buf,
                         "INSERT OR IGNORE INTO MLinks (idA, idB, meanL, varianceL, lasttimeL, meanB, varianceB, lasttimeB) "
@@ -346,13 +348,14 @@ void LeaderStorage::removeOldLNodes(int seconds) {
     isError(err, zErrMsg, "removeOldLNodesLeader1");
 
     for(string leader : leaders) {
+        printf("Delete leader: %s", leader.c_str());
         std::sprintf(buf,"DELETE FROM MMNodes WHERE id = \"%s\"", leader.c_str());
         err = sqlite3_exec(this->db, buf, 0, 0, &zErrMsg);
         isError(err, zErrMsg, "removeOldNodesLeader2");
 
         vector<string> ids;
         std::sprintf(buf,"SELECT id FROM MNodes WHERE monitoredBy = \"%s\"", leader.c_str());
-        int err = sqlite3_exec(this->db, buf, IStorage::VectorStringCallback, &ids, &zErrMsg);
+        err = sqlite3_exec(this->db, buf, IStorage::VectorStringCallback, &ids, &zErrMsg);
         isError(err, zErrMsg, "removeOldLNodesLeader3");
 
         std::sprintf(buf,"DELETE FROM MNodes WHERE monitoredBy = \"%s\"", leader.c_str());
@@ -361,7 +364,7 @@ void LeaderStorage::removeOldLNodes(int seconds) {
 
         for(string id : ids) {
             std::sprintf(buf,"DELETE FROM MLinks WHERE idA = \"%s\" OR idB = \"%s\"", id.c_str(),id.c_str());
-            int err = sqlite3_exec(this->db, buf, 0, 0, &zErrMsg);
+            err = sqlite3_exec(this->db, buf, 0, 0, &zErrMsg);
             isError(err, zErrMsg, "removeOldLNodesLeader5");
 
             std::sprintf(buf,"DELETE FROM MIots WHERE idNode = \"%s\"", id.c_str());
@@ -381,22 +384,68 @@ void LeaderStorage::removeOldNodes(int seconds) {
     std::vector<Message::node> vec = this->getMLRHardware(100, seconds);
 
     std::sprintf(buf,"DELETE FROM MNodes WHERE monitoredBy = \"%s\" AND strftime('%%s',lasttime)+%d-strftime('%%s','now') <= 0", this->nodeM.id.c_str(), seconds);
-
     int err = sqlite3_exec(this->db, buf, 0, 0, &zErrMsg);
     isError(err, zErrMsg, "removeOldNodesLeader1");
 
     for(auto node : vec) {
+        printf("Delete follower: %s", node.ip.c_str());
         std::sprintf(buf,"DELETE FROM MLinks WHERE idA = \"%s\" OR idB = \"%s\"", node.id.c_str(),node.id.c_str());
-
-        int err = sqlite3_exec(this->db, buf, 0, 0, &zErrMsg);
+        err = sqlite3_exec(this->db, buf, 0, 0, &zErrMsg);
         isError(err, zErrMsg, "removeOldNodesLeader2");
 
         std::sprintf(buf,"DELETE FROM MIots WHERE idNode = \"%s\"", node.id.c_str());
-
         err = sqlite3_exec(this->db, buf, 0, 0, &zErrMsg);
         isError(err, zErrMsg, "removeOldNodesLeader3");
     }
     sqlite3_exec(db, "END TRANSACTION;", NULL, NULL, NULL);    
+}
+
+void LeaderStorage::removeChangeRole(std::vector<Message::node> leaders) {
+    std::vector<Message::node> nodes = this->getMNodes();
+    std::vector<Message::node> vec;
+    for(auto node : nodes) {
+        bool found = false;
+        for(auto selected : leaders) {
+            if(node.id == selected.id) {
+                found = true;
+            }
+        }
+        if(!found) {
+            vec.push_back(node);
+        }
+    }
+    char *zErrMsg = 0;
+    char buf[1024];
+
+    sqlite3_exec(db, "BEGIN TRANSACTION;", NULL, NULL, NULL);
+
+    for(auto node : vec) {
+        printf("Delete leader (change): %s", node.ip.c_str());
+        string leader = node.id;
+        std::sprintf(buf,"DELETE FROM MMNodes WHERE id = \"%s\"", leader.c_str());
+        int err = sqlite3_exec(this->db, buf, 0, 0, &zErrMsg);
+        isError(err, zErrMsg, "removeOldNodesLeader2");
+
+        vector<string> ids;
+        std::sprintf(buf,"SELECT id FROM MNodes WHERE monitoredBy = \"%s\"", leader.c_str());
+        err = sqlite3_exec(this->db, buf, IStorage::VectorStringCallback, &ids, &zErrMsg);
+        isError(err, zErrMsg, "removeOldLNodesLeader3");
+
+        std::sprintf(buf,"DELETE FROM MNodes WHERE monitoredBy = \"%s\"", leader.c_str());
+        err = sqlite3_exec(this->db, buf, 0, 0, &zErrMsg);
+        isError(err, zErrMsg, "removeOldNodesLeader4");
+
+        for(string id : ids) {
+            std::sprintf(buf,"DELETE FROM MLinks WHERE idA = \"%s\" OR idB = \"%s\"", id.c_str(),id.c_str());
+            err = sqlite3_exec(this->db, buf, 0, 0, &zErrMsg);
+            isError(err, zErrMsg, "removeOldLNodesLeader5");
+
+            std::sprintf(buf,"DELETE FROM MIots WHERE idNode = \"%s\"", id.c_str());
+            err = sqlite3_exec(this->db, buf, 0, 0, &zErrMsg);
+            isError(err, zErrMsg, "removeOldLNodesLeader6");
+        }
+    }
+    sqlite3_exec(db, "END TRANSACTION;", NULL, NULL, NULL);  
 }
 
 void LeaderStorage::complete() {

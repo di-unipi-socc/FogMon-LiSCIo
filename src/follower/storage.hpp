@@ -30,7 +30,7 @@ public:
     void saveBandwidthTest(Message::node node, float kbps, int state);
     void saveHardware(Report::hardware_result hardware);
 
-    void saveState();
+    void saveState(int64_t last, int sensitivity= 10);
 
     void refreshNodes(std::vector<Message::node> nodes);
     void updateNodes(std::vector<Message::node> add, std::vector<Message::node> rem);

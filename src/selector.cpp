@@ -111,7 +111,25 @@ bool Selector::checkSelection(bool doit) {
 
     printf("[TESTING] Leaders number: %d\n[TESTING] Follower number: %d\n",nL,nF);
 
-    if(sqrt(nF) >= nL+1) {
+    bool check = false;
+    int formula = this->parent->node->leaderFormula;
+    switch(formula) {
+        case -2:
+            check = sqrt(nF)*2 >= nL+1
+        break;
+        case -1:
+            check = sqrt(nF)/1.55 >= nL+1
+        break
+        case 0:
+        default:
+            if(formula > 0){
+                check = formula != nL
+            }else{
+                check = sqrt(nF) >= nL+1
+            }
+    }
+
+    if(check) {
         printf("STARTING SELECTION (not enough nodes)\n");
         this->startSelection();
         return true;
@@ -172,9 +190,9 @@ void Selector::stopSelection() {
 }
 
 Message::leader_update Selector::selection(int id) {
-
+    int formula = this->parent->node->leaderFormula;
     //calculate with a script the update and set the id on it
-    const char *args[] = {"./scripts/cluster.py",NULL};
+    const char *args[] = {"./scripts/cluster.py", std::to_string(formula).c_str(),NULL};
     ReadProc * proc = new ReadProc((char**)args);
 
      {

@@ -93,7 +93,7 @@ Report::hardware_result Storage::getHardware() {
 std::vector<Report::test_result> Storage::getLatency(int64_t last, int sensitivity) {
     char *zErrMsg = 0;
     char buf[1024];
-    std::sprintf(buf,"SELECT N.id, N.ip, N.port, avg(L.ms) AS mean, variance(L.ms) AS var, strftime('%%s',max(L.time)) as time FROM Latency AS L JOIN Nodes AS N WHERE L.idNodeB = N.id GROUP BY N.id HAVING ((N.lastMeanL-avg(L.ms))/N.lastMeanL > %d OR (N.lastVarianceL-variance(L.ms))/N.lastVarianceL > %d) AND strftime('%%s',max(L.time))>%" PRId64, sensitivity, sensitivity,last);
+    std::sprintf(buf,"SELECT N.id, N.ip, N.port, avg(L.ms) AS mean, variance(L.ms) AS var, strftime('%%s',max(L.time)) as time FROM Latency AS L JOIN       Nodes AS N WHERE L.idNodeB = N.id GROUP BY N.id HAVING ( abs(N.lastMeanL-avg(L.ms))/abs(N.lastMeanL) > (%d/100) OR abs(N.lastVarianceL-variance(L.ms))/abs(N.lastVarianceL) > (%d/100)) AND strftime('%%s',max(L.time))>%" PRId64, sensitivity, sensitivity,last);
 
     vector<Report::test_result> tests;
 
@@ -108,7 +108,7 @@ std::vector<Report::test_result> Storage::getLatency(int64_t last, int sensitivi
 std::vector<Report::test_result> Storage::getBandwidth(int64_t last, int sensitivity) {
     char *zErrMsg = 0;
     char buf[1024];
-    std::sprintf(buf,"SELECT N.id, N.ip, N.port, avg(B.kbps) AS mean, variance(B.kbps) AS var, strftime('%%s',max(B.time)) as time FROM Bandwidth AS B JOIN Nodes AS N WHERE B.idNodeB = N.id GROUP BY N.id HAVING ((N.lastMeanL-avg(B.kbps))/N.lastMeanL > %d OR (N.lastVarianceL-variance(B.kbps))/N.lastVarianceL > %d) AND strftime('%%s',max(B.time))>%" PRId64, sensitivity, sensitivity, last);
+    std::sprintf(buf,"SELECT N.id, N.ip, N.port, avg(B.kbps) AS mean, variance(B.kbps) AS var, strftime('%%s',max(B.time)) as time FROM Bandwidth AS B JOIN Nodes AS N WHERE B.idNodeB = N.id GROUP BY N.id HAVING ( abs(N.lastMeanB-avg(B.kbps))/abs(N.lastMeanB) > (%d/100) OR abs(N.lastVarianceB-variance(B.kbps))/abs(N.lastVarianceB) > (%d/100)) AND strftime('%%s',max(B.time))>%" PRId64, sensitivity, sensitivity, last);
 
     vector<Report::test_result> tests;
 
@@ -118,7 +118,7 @@ std::vector<Report::test_result> Storage::getBandwidth(int64_t last, int sensiti
     return tests;
 }
 
-void Storage::saveState() {
+void Storage::saveState(int64_t last, int sensitivity) {
     char *zErrMsg = 0;
     char buf[1024];
     std::sprintf(buf,   "INSERT OR REPLACE INTO Nodes (id,ip,port, latencyTime, lastMeanL, lastVarianceL, bandwidthTime, bandwidthState, lastMeanB, lastVarianceB) "
@@ -127,9 +127,10 @@ void Storage::saveState() {
                         " A.bandwidthTime AS bandwidthTime, A.bandwidthState AS bandwidthState,"
                         " B.mean AS lastMeanB, B.var AS lastVarianceB"
                         " from Nodes AS A"
-                        " join (SELECT N.id as id, avg(L1.ms) AS mean, variance(L1.ms) AS var FROM Latency AS L1 JOIN Nodes AS N WHERE L1.idNodeB = N.id group by N.id ) AS L "
-                        " join (SELECT N.id as id, avg(B1.kbps) AS mean, variance(B1.kbps) AS var FROM Bandwidth AS B1 JOIN Nodes AS N WHERE B1.idNodeB = N.id group by N.id ) AS B "
-                        " WHERE A.id == L.id AND A.id == L.id ");
+                        " join (SELECT N.id as id, avg(L1.ms) AS mean, variance(L1.ms) AS var FROM Latency AS L1 JOIN Nodes AS N WHERE L1.idNodeB = N.id group by N.id HAVING ( abs(N.lastMeanL-avg(L1.ms))/abs(N.lastMeanL) > (%d/100) OR abs(N.lastVarianceL-variance(L1.ms))/abs(N.lastVarianceL) > (%d/100)) AND strftime('%%s',max(L1.time))>%" PRId64 ") AS L "
+                        " join (SELECT N.id as id, avg(B1.kbps) AS mean, variance(B1.kbps) AS var FROM Bandwidth AS B1 JOIN Nodes AS N WHERE B1.idNodeB = N.id group by N.id HAVING ( abs(N.lastMeanB-avg(B1.kbps))/abs(N.lastMeanB) > (%d/100) OR abs(N.lastVarianceB-variance(B1.kbps))/abs(N.lastVarianceB) > (%d/100)) AND strftime('%%s',max(B1.time))>%" PRId64 ") AS B "
+                        " WHERE A.id == L.id AND A.id == L.id ",
+                        sensitivity, sensitivity, last, sensitivity, sensitivity, last);
 
 
     int err = sqlite3_exec(this->db, buf, 0, 0, &zErrMsg);

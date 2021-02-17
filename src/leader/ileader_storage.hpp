@@ -37,6 +37,8 @@ public:
     virtual void removeOldLNodes(int seconds) = 0;
     virtual void removeOldNodes(int seconds) = 0;
 
+    virtual void removeChangeRole(std::vector<Message::node> leaders) = 0;
+
     virtual void complete() = 0;
 };
 

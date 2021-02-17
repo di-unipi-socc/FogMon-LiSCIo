@@ -161,7 +161,7 @@ bool Connections::getMessage(int fd, Message &m) {
     {
         perror("   recv() failed at len");
         cout << "len: "<<len << endl << " error: "<< error <<endl;
-        stacktrace();
+        //stacktrace();
     }else if(len > 0) {
         char * data;
         try {

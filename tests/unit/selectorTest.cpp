@@ -53,7 +53,7 @@ public:
     virtual Report::hardware_result getHardware() {}
     virtual std::vector<Report::test_result> getLatency(int64_t last, int sensibility) {}
     virtual std::vector<Report::test_result> getBandwidth(int64_t last, int sensibility) {}
-    virtual void saveState() {}
+    virtual void saveState(int64_t last, int sensitivity = 10) {}
 
     virtual std::vector<Report::IoT> getIots() {}
 
@@ -109,6 +109,7 @@ public:
     virtual void addReport(std::vector<Report::report_result> results, Message::node ip) {}
     virtual void removeOldLNodes(int seconds) {}
     virtual void removeOldNodes(int seconds) {}
+    virtual void removeChangeRole(std::vector<Message::node> leaders) {}
     virtual void complete() {}
 
     virtual void addIot(IThing *iot) {};

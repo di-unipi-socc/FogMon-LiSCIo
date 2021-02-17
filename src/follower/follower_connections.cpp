@@ -304,8 +304,8 @@ optional<pair<int64_t,Message::node>> FollowerConnections::sendUpdate(Message::n
     r.setIot(this->parent->getStorage()->getIots());
 
     int64_t now = this->parent->getStorage()->getTime();
+    int64_t time = update.first;
     if(ipS == update.second) {
-        int64_t time = update.first;
         r.setLatency(this->parent->getStorage()->getLatency(time));
         r.setBandwidth(this->parent->getStorage()->getBandwidth(time));
         
@@ -328,7 +328,7 @@ optional<pair<int64_t,Message::node>> FollowerConnections::sendUpdate(Message::n
                 res.getArgument() == Message::Argument::POSITIVE) {
                 
                 result = std::make_pair(now, ipS);
-                this->parent->getStorage()->saveState();
+                this->parent->getStorage()->saveState(time);
             }
         }
     }

@@ -20,7 +20,7 @@ public:
 
     virtual void initialize(LeaderFactory* factory = NULL);
 
-    virtual void start(vector<Message::node> mNodes);
+    virtual void start(std::vector<Message::node> mNodes);
     virtual void stop();
 
     ILeaderConnections* getConnections();

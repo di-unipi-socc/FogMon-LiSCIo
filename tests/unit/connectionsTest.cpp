@@ -48,7 +48,7 @@ public:
         return ret;
     }
 
-    virtual void saveState() {}
+    virtual void saveState(int64_t last, int sensitivity = 10) {}
 
     virtual std::vector<Report::IoT> getIots() {
         std::vector<Report::IoT> iots;
@@ -110,8 +110,9 @@ public:
     virtual std::string addNode(Message::node strIp, Report::hardware_result hardware, Message::node *monitored = NULL) {}
     virtual void addReport(Report::report_result result, Message::node *monitored = NULL) {}
     virtual void addReport(std::vector<Report::report_result> results, Message::node ip) {}
-    virtual void removeOldLNodes(int seconds) {};
+    virtual void removeOldLNodes(int seconds) {}
     virtual void removeOldNodes(int seconds) {}
+    virtual void removeChangeRole(std::vector<Message::node> leaders) {}
     virtual void complete() {}
 
     virtual void addIot(IThing *iot) {};

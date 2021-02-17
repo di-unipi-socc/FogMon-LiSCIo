@@ -48,7 +48,7 @@ public:
     */
     virtual std::vector<Report::test_result> getBandwidth(int64_t last = 0, int sensitivity = 10) = 0;
 
-    virtual void saveState() = 0;
+    virtual void saveState(int64_t last, int sensitivity = 10) = 0;
 
     /**
      * save a latency test

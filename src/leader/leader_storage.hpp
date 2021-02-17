@@ -44,6 +44,8 @@ public:
     virtual void removeOldLNodes(int seconds);
     virtual void removeOldNodes(int seconds);
 
+    virtual void removeChangeRole(std::vector<Message::node> leaders);
+
     void complete();
 
     virtual Report::hardware_result getHardware(Message::node node);

@@ -1,26 +1,36 @@
 {% extends "layout.html" %}
 {% block title %}Testbeds{% endblock %}
+{% block head %}
+  {{ super() }}
+  <script src="/static/testbeds.js"></script>
+{% endblock %}
 {% set active_page = "testbeds" %}
 {% block content %}
 <div class="container">
-    <h2> Running Containers Found: 3</h2> <br>
-    <table id="sessions" class="table">
+    <h2> Found sessions: {{ num }}</h2> <br>
+    <table id="sessions" class="table table-hover">
         <thead>
         <tr>
             <th>Session id</th>
             <th>Last Update</th>
-            <th>Logs</th>
+            <th>Spec</th>
         </tr>
         </thead>
-{% for r in data %}
+{% if num > 0 %}
         <tbody>
-            <tr>
-                <td>{{r.id}}</td>
-                <td>{{r.date}}</td>
-                <td>{{r.num}}</td>
+{% endif %}
+{% for r in data %}
+            <tr session={{ r.session }} spec={{ "1" if r.specs is defined else "0" }}>
+                <td>{{ r.session }}</td>
+                <td>{{ r.datetime }}</td>
+                <td>{{ r.specs if r.specs is defined else "False" }}</td>
             </tr>
-        </tbody>
 {% endfor %}
+{% if num > 0 %}
+        </tbody>
+{% endif %}
     </table>
+    <h2> Selected session:</h2> <br>
+    <div id="session"></div>
 </div>
 {% endblock %}

@@ -21,6 +21,10 @@ Node::Node(string port, bool isLeader, int threads) {
     this->interfaceIp = "";
     this->session = 0;
 
+    this->testWindow = 20;
+    this->sensibility = 10;
+    this->leaderFormula = 0;
+
     this->isLeader = isLeader;
     this->agent = NULL;
     this->port = port;
@@ -171,6 +175,12 @@ bool Node::setParam(std::string name, int value) {
         this->timeheartbeat = value;
     }else if(name == string("time-propagation")) {
         this->timePropagation = value;
+    }else if(name == string("test-window")) {
+        this->testWindow = value;
+    }else if(name == string("sesibility")) {
+        this->sensibility = value;
+    }else if(name == string("leader-formula")) {
+        this->leaderFormula = value;
     }else if(name == string("session")) {
         this->session = value;
     }else
