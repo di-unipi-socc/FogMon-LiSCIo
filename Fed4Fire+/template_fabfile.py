@@ -41,7 +41,10 @@ docker = [
     "sudo apt-get install -y docker-ce docker-ce-cli containerd.io",
     f"sudo usermod -aG docker {user}",
     #"newgrp docker"
-    "sudo apt-get install screen"
+    "sudo apt-get install -y python3-pip",
+    "sudo apt-get install -y bmon",
+    "sudo pip3 uninstall -y psrecord",
+    "sudo pip3 install psrecord matplotlib"
 ]
 
 vbox = [
@@ -281,7 +284,7 @@ def pullFogmon(ctx):
     staging(ctx)
     for conn in ctx.CONNS:
         i=0
-        for image in images:
+        for image in images[:1]:
             conn.run(f"screen -d -m -S fogmon-{i} bash -c 'sudo docker pull {image}'")
             i+=1
         print(conn.original_host)
@@ -305,37 +308,107 @@ def buildFogmon(ctx):
 def startFogmon(ctx):
     staging(ctx)
     leader = None
+    session = ""
+    if "session" in ctx.SPEC:
+        session = "-s "+str(ctx.SPEC["session"])+" -i 131.114.72.76:8248"
     for conn in ctx.CONNS:
         if leader is None:
             # sudo docker run -it --net=host diunipisocc/liscio-fogmon:test --leader
-            conn.run(f"screen -d -m -S fogmon bash -c 'sudo docker run -it --net=host {images[0]} --leader > log.txt'")
+            conn.run(f"screen -d -m -S fogmon bash -c 'sudo docker run -it --net=host {images[0]} --leader {session} | tee log.txt'")
             leader = conn.original_host
         else:
             # sudo docker run -it --net=host diunipisocc/liscio-fogmon:test -C node0
-            conn.run(f"screen -d -m -S fogmon bash -c 'sudo docker run -it --net=host {images[0]} -C {leader} > log.txt'")
+            conn.run(f"screen -d -m -S fogmon bash -c 'sudo docker run -it --net=host {images[0]} -C {leader} {session} | tee log.txt'")
         print(conn.original_host)
 
 @task
 def startFogmonValgrind(ctx):
     staging(ctx)
     leader = None
+    session = ""
+    if "session" in ctx.SPEC:
+        session = "-s "+str(ctx.SPEC["session"])+" -i 131.114.72.76:8248"
     for conn in ctx.CONNS:
         if leader is None:
-            # sudo docker run -it --net=host diunipisocc/liscio-fogmon:test --leader
-            conn.run(f"screen -d -m -S fogmon bash -c 'sudo docker run -it --net=host {images[1]} --leader > log.txt'")
+            # sudo docker run -it --net=host diunipisocc/liscio-fogmon:test --leader -s 3 -i 131.114.72.76:8248
+            conn.run(f"screen -d -m -S fogmon bash -c 'sudo docker run -it --net=host {images[1]} --leader {session} | tee log.txt'")
             leader = conn.original_host
         else:
             # sudo docker run -it --net=host diunipisocc/liscio-fogmon:test -C node0
-            conn.run(f"screen -d -m -S fogmon bash -c 'sudo docker run -it --net=host {images[1]} -C {leader} > log.txt'")
+            conn.run(f"screen -d -m -S fogmon bash -c 'sudo docker run -it --net=host {images[1]} -C {leader} {session} | tee log.txt'")
         print(conn.original_host)
 
 @task
-def gatherFogmonValgrind(ctx):
+def startMonitor(ctx):
+    script = """
+bmon -r 1 -o format:fmt='$(element:name) $(attr:rxrate:bytes) $(attr:txrate:bytes)\\n' -p $(ip route | grep default | sed -e 's/^.*dev.//' -e 's/.proto.*//') > bmon.log &
+P1=$!
+sudo docker stats --format '{{.Container}}\\t{{.CPUPerc}}\\t{{.MemUsage}}' > test.log &
+P2=$!
+wait $P1 $P2
+echo 'Done'
+    """
+    """sudo docker stats --format '{{.Container}}\\t{{.CPUPerc}}\\t{{.MemUsage}}' > stats.txt
+    psrecord $(pgrep dockerd) --interval 1 --log test.log
+    """
+    script = script.replace("$","\\$")
+    staging(ctx)
+    spec = ctx.SPEC
+    for conn in ctx.CONNS:
+        file = "/tmp/script6409f4fa.sh"
+        conn.run(f"> {file}")
+        print(f"created {file}")
+        conn.run(f"chmod +x {file}")
+        conn.run(f"echo \"{script}\" >> {file}")
+        conn.run(f"screen -d -m -S monitor bash -c '{file}'")
+    pass
+
+
+@task
+def stopMonitor(ctx):
+    staging(ctx)
+    for conn in ctx.CONNS:
+        conn.run("screen -S monitor -X stuff '0'`echo -ne $'\cc'` | screen -list | ps ax | grep 'bmon'")
+    for conn in ctx.CONNS:
+        host = conn.original_host
+        conn.get("test.log", host+"-cpu.txt")
+        conn.get("bmon.log", host+"-bmon.txt")
+        print(conn.original_host)
+
+@task
+def sendFootprint(ctx):
+    staging(ctx)
+    spec = ctx.SPEC
+    files = {}
+    for conn in ctx.CONNS:
+        host = conn.original_host
+        bmon = host+"-bmon.txt"
+        psrecord = host+"-cpu.txt"
+        files[bmon] = open(bmon,'rb')
+        files[psrecord] = open(psrecord,'rb')
+        print(conn.original_host)
+
+    import requests
+    r = requests.post("http://131.114.72.76:8248/testbed/%d/footprint"%spec["session"], files=files)
+    print(r.status_code)
+    print(r.json)
+
+
+@task
+def clearFogmon(ctx):
+    staging(ctx)
+    for conn in ctx.CONNS:
+        host = conn.original_host
+        conn.run("rm log.txt")
+        print(host)
+
+@task
+def gatherFogmon(ctx):
     staging(ctx)
     for conn in ctx.CONNS:
         host = conn.original_host
         conn.get("log.txt", host+"-log.txt")
-        print(conn.original_host)
+        print(host)
 
 @task
 def stopFogmon(ctx):

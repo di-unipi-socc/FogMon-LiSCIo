@@ -4,5 +4,13 @@ fixed recv and write for errno == EINPROGRESS.
 fixed bugs on leader crash.
 fixed bugs on gossiping protocol.
 added valgrind version for debug of crashes.
+fixed sensibility problem resulting in not sending any update on Bandwidth and Latency
 
 Added interface service
+
+possible improvment, change of follower association method
+multithread of tests
+mean of tests in follower (20 too many not reactive?)
+timeheartbeat = reportTime? modify accordigly
+
+tune assolo estimates
