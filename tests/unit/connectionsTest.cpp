@@ -37,18 +37,18 @@ public:
     virtual Report::hardware_result getHardware() {
         return Report::hardware_result();
     }
-    virtual std::vector<Report::test_result> getLatency(int64_t last, int sensibility) {
+    virtual std::vector<Report::test_result> getLatency(int sensibility, int64_t last) {
         vector<Report::test_result> ret;
         ret.push_back(Report::test_result());
         return ret;
     }
-    virtual std::vector<Report::test_result> getBandwidth(int64_t last, int sensibility) {
+    virtual std::vector<Report::test_result> getBandwidth(int sensibility, int64_t last) {
         vector<Report::test_result> ret;
         ret.push_back(Report::test_result());
         return ret;
     }
 
-    virtual void saveState(int64_t last, int sensitivity = 10) {}
+    virtual void saveState(int64_t last, int sensitivity) {}
 
     virtual std::vector<Report::IoT> getIots() {
         std::vector<Report::IoT> iots;
@@ -58,9 +58,9 @@ public:
     }
 
 
-    virtual void saveLatencyTest(Message::node ip, int ms) {}
-    virtual void saveBandwidthTest(Message::node ip, float kbps, int state) {}
-    virtual void saveHardware(Report::hardware_result hardware) {}
+    virtual void saveLatencyTest(Message::node ip, int ms, int window) {}
+    virtual void saveBandwidthTest(Message::node ip, float kbps, int state, int window) {}
+    virtual void saveHardware(Report::hardware_result hardware, int window) {}
 
     virtual void refreshNodes(std::vector<Message::node> nodes) {
         EXPECT_EQ(nodes.size(), 1);
@@ -302,12 +302,25 @@ TEST(ConnectionsTest, RGetNodes) {
     conn.stop();
 }
 
+class MNode : public Node {
+public:
+
+    MNode() : Node("a",false,0) {}
+
+    void promote() {
+        sent=true;
+    }
+    bool sent = false;
+};
+
 TEST(ConnectionsTest, RGetReport) {
     int pipefd[2];
     MConn mConn;
 
     EXPECT_EQ(socketpair(PF_LOCAL, SOCK_STREAM,0,pipefd), 0);
     MParent mNode;
+    MNode node;
+    mNode.setParent(&node);
     FollowerConnections conn(1);
     conn.initialize(&mNode);
     conn.start();
@@ -334,8 +347,8 @@ TEST(ConnectionsTest, RGetReport) {
 
     Report r2; 
     r2.setHardware(((IStorage*)mNode.getStorage())->getHardware());
-    r2.setLatency(((IStorage*)mNode.getStorage())->getLatency());
-    r2.setBandwidth(((IStorage*)mNode.getStorage())->getBandwidth());
+    r2.setLatency(((IStorage*)mNode.getStorage())->getLatency(10));
+    r2.setBandwidth(((IStorage*)mNode.getStorage())->getBandwidth(10));
     r2.setIot(((IStorage*)mNode.getStorage())->getIots());
 
     rapidjson::StringBuffer s;

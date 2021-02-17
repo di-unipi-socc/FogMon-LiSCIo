@@ -6,6 +6,15 @@ from pyclustering.samples.definitions import FCPS_SAMPLES
 import random
 import math
 import sqlite3
+import sys
+
+if len(sys.argv) != 2:
+    exit()
+
+try:
+    formula = int(sys.argv[1])
+except:
+    exit()
 
 def avg_dist(matrix,cluster,medoid):
     m = 0
@@ -74,7 +83,14 @@ for i in range(len(A)):
 
 c.close()
 
-k = int(math.sqrt(N))
+if formula == -1:
+    k = int(math.sqrt(N)/1.55)
+elif formula == -2:
+    k = int(math.sqrt(N)*2)
+elif formula > 0:
+    k = formula
+else:
+    k = int(math.sqrt(N))
 
 # Set random initial medoids. considering the already selected leaders
 if L<k:

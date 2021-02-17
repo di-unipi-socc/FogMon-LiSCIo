@@ -71,8 +71,10 @@ int main(int argc, char *argv[]) {
     int max_bandwidth = 3;
     int leader_check = 8;
     
-    int test_window = 20;
-    int sesibility = 10;
+    int latency_window = 5;
+    int bandwidth_window = 5;
+    int hardware_window = 20;
+    int sensitivity = 10;
     int leader_formula = 0;
 
     bool leader = false;
@@ -101,11 +103,17 @@ int main(int argc, char *argv[]) {
     if(input.cmdOptionExists("--leader-check"))
         leader_check = stoi(input.getCmdOption("--leader-check"));
 
-    if(input.cmdOptionExists("--test-window"))
-        test_window = stoi(input.getCmdOption("--test-window"));
+    if(input.cmdOptionExists("--latency-window"))
+        latency_window = stoi(input.getCmdOption("--latency-window"));
     
-    if(input.cmdOptionExists("--sesibility"))
-        sesibility = stoi(input.getCmdOption("--sesibility"));
+    if(input.cmdOptionExists("--bandwidth-window"))
+        bandwidth_window = stoi(input.getCmdOption("--bandwidth-window"));
+
+    if(input.cmdOptionExists("--hardware-window"))
+        hardware_window = stoi(input.getCmdOption("--hardware-window"));
+
+    if(input.cmdOptionExists("--sensitivity"))
+        sensitivity = stoi(input.getCmdOption("--sensitivity"));
     
     if(input.cmdOptionExists("--leader-formula"))
         leader_formula = stoi(input.getCmdOption("--leader-formula"));
@@ -140,8 +148,10 @@ int main(int argc, char *argv[]) {
     node.setParam(string("max-per-bandwidth"), max_bandwidth);
     node.setParam(string("leader-check"), leader_check);
 
-    node.setParam(string("test-window"), test_window);
-    node.setParam(string("sesibility"), sesibility);
+    node.setParam(string("latency-window"), latency_window);
+    node.setParam(string("bandwidth-window"), bandwidth_window);
+    node.setParam(string("hardware-window"), hardware_window);
+    node.setParam(string("sensitivity"), sensitivity);
     node.setParam(string("leader-formula"), leader_formula);
 
     node.setParam(string("interface"), interfaceIp);

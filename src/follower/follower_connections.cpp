@@ -119,8 +119,8 @@ void FollowerConnections::handler(int fd, Message &m) {
                 Report r;
                 
                 r.setHardware(this->parent->getStorage()->getHardware());
-                r.setLatency(this->parent->getStorage()->getLatency());
-                r.setBandwidth(this->parent->getStorage()->getBandwidth());
+                r.setLatency(this->parent->getStorage()->getLatency(this->parent->node->sensitivity));
+                r.setBandwidth(this->parent->getStorage()->getBandwidth(this->parent->node->sensitivity));
                 r.setIot(this->parent->getStorage()->getIots());
                 res.setData(r);
 
@@ -310,8 +310,8 @@ optional<pair<int64_t,Message::node>> FollowerConnections::sendUpdate(Message::n
         r.setBandwidth(this->parent->getStorage()->getBandwidth(time));
         
     } else { //send all data
-        r.setLatency(this->parent->getStorage()->getLatency());
-        r.setBandwidth(this->parent->getStorage()->getBandwidth());
+        r.setLatency(this->parent->getStorage()->getLatency(this->parent->node->sensitivity));
+        r.setBandwidth(this->parent->getStorage()->getBandwidth(this->parent->node->sensitivity));
     }
     m.setData(r);
 
@@ -328,7 +328,7 @@ optional<pair<int64_t,Message::node>> FollowerConnections::sendUpdate(Message::n
                 res.getArgument() == Message::Argument::POSITIVE) {
                 
                 result = std::make_pair(now, ipS);
-                this->parent->getStorage()->saveState(time);
+                this->parent->getStorage()->saveState(time,this->parent->node->sensitivity);
             }
         }
     }

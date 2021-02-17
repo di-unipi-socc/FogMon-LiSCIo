@@ -41,33 +41,33 @@ public:
      * get a vector of latency test
      * @return a vector of tests for the latency
     */
-    virtual std::vector<Report::test_result> getLatency(int64_t last = 0, int sensitivity = 10) = 0;
+    virtual std::vector<Report::test_result> getLatency(int sensitivity, int64_t last = 0) = 0;
     /**
      * get a vector of bandwidth test
      * @return a vector of tests for the bandwidth
     */
-    virtual std::vector<Report::test_result> getBandwidth(int64_t last = 0, int sensitivity = 10) = 0;
+    virtual std::vector<Report::test_result> getBandwidth(int sensitivity, int64_t last = 0) = 0;
 
-    virtual void saveState(int64_t last, int sensitivity = 10) = 0;
+    virtual void saveState(int64_t last, int sensitivity) = 0;
 
     /**
      * save a latency test
      * @param ip the destination ip for the test
      * @param ms the result of the test in milliseconds
     */
-    virtual void saveLatencyTest(Message::node node, int ms) = 0;
+    virtual void saveLatencyTest(Message::node node, int ms, int window) = 0;
     /**
      * save a bandwidth test
      * @param ip the destination ip for the test
      * @param kbps the result of the test in kilobit per seconds
      * @param state the state for the bandwidth measurement routine
     */
-    virtual void saveBandwidthTest(Message::node node, float kbps, int state) = 0;
+    virtual void saveBandwidthTest(Message::node node, float kbps, int state, int window) = 0;
     /**
      * save a hardware test
      * @param hardware the result of the test
     */
-    virtual void saveHardware(Report::hardware_result hardware) = 0;
+    virtual void saveHardware(Report::hardware_result hardware, int window) = 0;
 
     /**
      * add and reset the nodes in the list

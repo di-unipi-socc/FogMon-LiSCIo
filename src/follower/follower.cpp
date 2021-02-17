@@ -533,7 +533,7 @@ void Follower::getHardware() {
     hardware.disk = disk.total;
     hardware.mean_free_disk = disk.avail;
 
-    this->storage->saveHardware(hardware);
+    this->storage->saveHardware(hardware, this->node->hardwareWindow);
 
     sigar_cpu_list_destroy(sigar, &cpulist);
 
@@ -643,7 +643,7 @@ void Follower::TestTimer() {
                 continue;
             int val = this->testPing(node.ip);
             if(val >= 0) {
-                this->storage->saveLatencyTest(node, val);
+                this->storage->saveLatencyTest(node, val, this->node->latencyWindow);
             }
         }
         //test bandwidth
@@ -664,7 +664,7 @@ void Follower::TestTimer() {
             }
 
             if(val >= 0) {
-                this->storage->saveBandwidthTest(ips[i], val, state);
+                this->storage->saveBandwidthTest(ips[i], val, state, this->node->latencyWindow);
                 tested++;
             }
             i++;

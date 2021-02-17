@@ -67,7 +67,7 @@ TEST(StorageTest, SaveGetHardware) {
     hw.memory = 10*1000*1000;
     hw.mean_free_memory = 1*1000*1000;
     hw.lasttime = storage.getTime();
-    storage.saveHardware(hw);
+    storage.saveHardware(hw, 20);
 
     Report::hardware_result hw2 = storage.getHardware();
 
@@ -79,9 +79,9 @@ TEST(StorageTest, SaveGetLatency) {
     Storage storage;
     storage.open("testA.db");
     
-    storage.saveLatencyTest(node_test, 10);
+    storage.saveLatencyTest(node_test, 10, 10);
 
-    vector<Report::test_result> test = storage.getLatency();
+    vector<Report::test_result> test = storage.getLatency(10);
     int dim = 1;
     EXPECT_EQ(dim, test.size());
     if(test.size() == dim) {
@@ -97,9 +97,9 @@ TEST(StorageTest, SaveGetBandwidth) {
     Storage storage;
     storage.open("testA.db");
     
-    storage.saveBandwidthTest(node_test, 100.0f, 2);
+    storage.saveBandwidthTest(node_test, 100.0f, 2, 5);
 
-    vector<Report::test_result> test = storage.getBandwidth();
+    vector<Report::test_result> test = storage.getBandwidth(10);
     int dim = 1;
     EXPECT_EQ(dim, test.size());
     if(test.size() == dim) {

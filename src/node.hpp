@@ -44,8 +44,10 @@ public:
     int maxPerBandwidth;
     int leaderCheck;
 
-    int testWindow;
-    int sensibility;
+    int latencyWindow;
+    int bandwidthWindow;
+    int hardwareWindow;
+    int sensitivity;
     int leaderFormula;
 
     int timeheartbeat;

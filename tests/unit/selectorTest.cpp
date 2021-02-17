@@ -22,7 +22,7 @@ public:
 
     virtual Message::leader_update selection(int id) {
         if(id == 153) {
-            return Selector::selection(id);
+            return Selector::selection(id, this->parent->node->leaderFormula);
         }
         vector<Message::node> vect;
         vect.push_back(Message::node("a","",""));
@@ -51,16 +51,16 @@ public:
     virtual std::vector<Message::node> getNodes() {}
 
     virtual Report::hardware_result getHardware() {}
-    virtual std::vector<Report::test_result> getLatency(int64_t last, int sensibility) {}
-    virtual std::vector<Report::test_result> getBandwidth(int64_t last, int sensibility) {}
-    virtual void saveState(int64_t last, int sensitivity = 10) {}
+    virtual std::vector<Report::test_result> getLatency(int sensibility, int64_t last) {}
+    virtual std::vector<Report::test_result> getBandwidth(int sensibility, int64_t last) {}
+    virtual void saveState(int64_t last, int sensitivity) {}
 
     virtual std::vector<Report::IoT> getIots() {}
 
 
-    virtual void saveLatencyTest(Message::node ip, int ms) {}
-    virtual void saveBandwidthTest(Message::node ip, float kbps, int state) {}
-    virtual void saveHardware(Report::hardware_result hardware) {}
+    virtual void saveLatencyTest(Message::node ip, int ms, int window) {}
+    virtual void saveBandwidthTest(Message::node ip, float kbps, int state, int window) {}
+    virtual void saveHardware(Report::hardware_result hardware, int window) {}
 
     virtual void refreshNodes(std::vector<Message::node> nodes) {}
     virtual void updateNodes(std::vector<Message::node> add, std::vector<Message::node> rem) {}
@@ -205,9 +205,6 @@ public:
         sent=true;
     }
     bool sent = false;
-    string interfaceIp = "";
-    int session = 0;
-    int formula = 0;
 };
 
 TEST(SelectorTest, calcSelectionTest) {
@@ -381,6 +378,76 @@ TEST(SelectorTest, ScriptTest) {
     for(int i=0; i<up.selected.size(); i++) {
         EXPECT_EQ(to_string(vect[i]),up.selected[i].id);
     }
+}
+
+TEST(SelectorTest, ScriptTest2) {
+    MParent2 parent;
+
+    MNode node;
+    node.leaderFormula = 5;
+    parent.setParent(&node);
+
+    MSelector sel(&parent);
+    MSelector sel2(&parent);
+
+    parent.conn.selectorA = &sel;
+    parent.conn.selectorB = &sel2;
+
+    float table[10][10] {
+        {0,0,0,50,50,50,500,500,500,500},
+        {0,5,5,50,50,50,500,500,500,500},
+        {0,5,5,50,50,50,500,500,500,500},
+        {50,50,50,0,0,0,500,500,500,500},
+        {50,50,50,0,5,5,500,500,500,500},
+        {50,50,50,0,5,5,500,500,500,500},
+        {500,500,500,500,500,500,0,0,0,0},
+        {500,500,500,500,500,500,0,1,1,1},
+        {500,500,500,500,500,500,0,1,1,1},
+        {500,500,500,500,500,500,0,1,1,1},
+    };
+    unlink("leader_node.db");
+    ILeaderStorage * stor = new LeaderStorage(Message::node("0","::1",""));
+    stor->open("leader_node.db");
+    
+    for(int i=0; i< 10; i++) {
+        stor->addNode(Message::node(to_string(i),to_string(i),""),Report::hardware_result());
+    }
+
+    vector<Report::report_result> reports;
+    for(int i=0; i<10; i++) {
+        Report::report_result report;
+        vector<Report::test_result> lat;
+        for(int j=0; j<10; j++) {
+            string val;
+            if(i==j) {
+                continue;
+            }
+            if(j==0) {
+                val = "::1";
+            }
+            else 
+                val = to_string(j);
+            Report::test_result test(Message::node(to_string(j),val,""),table[i][j],0,0);
+            
+            lat.push_back(test);
+        }
+        report.latency = lat;
+        string val;
+        if(i==0) {
+            val = "::1";
+        }
+        else 
+            val = to_string(i);
+        report.source = Message::node(to_string(i),val,"");
+        reports.push_back(report);
+    }
+    
+    stor->addReport(reports,Message::node("0","::1",""));
+    usleep(10000);
+    Message::leader_update up = sel.selection(153);
+    int i = 0;
+    EXPECT_EQ(up.changes,4);
+    
 }
 
 TEST(SelectorTest, FollowerTest) {

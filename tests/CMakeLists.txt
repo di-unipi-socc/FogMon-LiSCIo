@@ -56,3 +56,6 @@ SETUP_TARGET_FOR_COVERAGE_LCOV(NAME tests_coverage
                               EXCLUDE "../rapidjson/*" "../tests/*" "/usr/*")
 endif()
 
+add_custom_command(TARGET Tests POST_BUILD
+                   COMMAND ${CMAKE_COMMAND} -E copy_directory
+                       ${CMAKE_SOURCE_DIR}/scripts $<TARGET_FILE_DIR:Tests>/scripts)
