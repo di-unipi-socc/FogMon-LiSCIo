@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import random
 import math
+import pickle
 
 # session 2: seed 7574
 #
@@ -86,12 +87,15 @@ class Topology:
             self.purge_(child, els)
 
     def purge(self, selected):
+        self.selected = selected
         els = []
         for id in selected:
             path = self.search_path(id)
             els+=path[0]
         self.purge_(self.tree,els)
-        return els
+        els.sort()
+        self.routers = list(dict.fromkeys(els))
+        return self.routers
 
     def sum_path(self, a, b):
         path = self.search_path(a)
@@ -125,24 +129,40 @@ class Topology:
                 M[1][i][j] = cost[1]
         return M
     
+    def save(self, path):
+        with open(path,"wb") as file:
+            pickle.dump(self, file)
+    
+    @staticmethod
+    def load(path):
+        with open(path,"rb") as file:
+            data = pickle.load(file)
+            return data
+
+    def plot(self, leaders):
+        import matplotlib.pyplot as plt
+        import networkx as nx
+        import pydot
+        from networkx.drawing.nx_pydot import graphviz_layout
+        def print_tree_(T,tree):
+            T.add_node(tree.id)
+            for child,cost in zip(tree.childs,tree.costs):
+                T.add_node(child.id)
+                T.add_edge(tree.id,child.id, l=cost[0],b=cost[1])
+                print_tree_(T,child)
+
+        def print_tree(tree):
+            T = nx.DiGraph()
+            print_tree_(T, tree)
+            return T
+        T=print_tree(self.tree)
+        pos = graphviz_layout(T, prog="dot")
+        nx.draw_networkx(T, pos, node_color=["yellow" if i in leaders else "pink" if i in self.selected else "#000000" for i in self.routers])
+        nx.draw_networkx_edge_labels(T, pos)
+        plt.show()
+
 if __name__ == "__main__":
 
-    def print_tree_(T,tree):
-        T.add_node(tree.id)
-        for child,cost in zip(tree.childs,tree.costs):
-            T.add_node(child.id)
-            T.add_edge(tree.id,child.id, l=cost[0],b=cost[1])
-            print_tree_(T,child)
-
-    def print_tree(tree):
-        T = nx.DiGraph()
-        print_tree_(T, tree)
-        return T
-
-    import matplotlib.pyplot as plt
-    import networkx as nx
-    import pydot
-    from networkx.drawing.nx_pydot import graphviz_layout
     from clusterer import Clusterer
 
     topology = Topology()
@@ -156,10 +176,7 @@ if __name__ == "__main__":
     selected = cloud_high + cloud_low + isp + home
 
     print(len(selected))
-    els = topology.purge(selected)
-    els.sort()
-    els = list(dict.fromkeys(els))
-    T=print_tree(topology.tree)
+    topology.purge(selected)
 
     N1 = 4
     N2 = 5
@@ -190,13 +207,11 @@ if __name__ == "__main__":
     
     #TODO insert colors for clusters
     print(data)
-    pos = graphviz_layout(T, prog="dot")
-    nx.draw_networkx(T, pos, node_color=["yellow" if i in data["new_leaders"]else "pink" if i in selected else "#000000" for i in els])
-    nx.draw_networkx_edge_labels(T, pos)
-    plt.show()
+    topology.plot(data["new_leaders"])
     print("save?")
     y = input()
     if y in ["yes","y"]:
+        topology.save("topology")
         from spec import Spec
         from template_fabfile import TestBeds, Ubuntu
         import json

@@ -48,7 +48,7 @@ public:
         /**
          * the time of the last test
         */
-        int64_t lasttime;
+        int64_t lasttime = 0;
         hardware_result() {}
         hardware_result(int cores, float free_cpu, int64_t memory, float free_memory, int64_t disk, float free_disk, int64_t lasttime) {
             this->cores = cores;

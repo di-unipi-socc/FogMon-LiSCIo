@@ -205,6 +205,9 @@ public:
         sent=true;
     }
     bool sent = false;
+    string interfaceIp = "";
+    int session = 0;
+    int formula = 0;
 };
 
 TEST(SelectorTest, calcSelectionTest) {
@@ -217,7 +220,7 @@ TEST(SelectorTest, calcSelectionTest) {
     EXPECT_EQ(e, true);
 
     e = sel.initSelection(9);
-    EXPECT_EQ(e, true);
+    EXPECT_EQ(e, false);
 
     e = sel.updateSelection(Message::leader_update());
     EXPECT_EQ(e, false);
@@ -227,7 +230,7 @@ TEST(SelectorTest, calcSelectionTest) {
     e = sel.calcSelection(Message::node(),10,r);
     EXPECT_EQ(r, true);
     EXPECT_EQ(e, true);
-    usleep(10000);
+    usleep(1000000);
     EXPECT_EQ(parent.conn.sent, true);
 
 
@@ -242,6 +245,9 @@ TEST(SelectorTest, interactionTest1) {
 
     MParent2 parent;
 
+    MNode node;
+    parent.setParent(&node);
+
     MSelector sel(&parent);
     MSelector sel2(&parent);
 
@@ -252,7 +258,7 @@ TEST(SelectorTest, interactionTest1) {
     sel2.setStatus(Selector::Status::READY);
 
     sel.start2();
-    usleep(1000);
+    usleep(1000000);
     EXPECT_EQ(sel2.getStatus(), Selector::Status::READY);
 
     parent.conn.selectorB = &sel;
@@ -264,7 +270,7 @@ TEST(SelectorTest, interactionTest1) {
     sel2.setStatus(Selector::Status::FREE);
     sel2.start2();
     EXPECT_EQ(sel2.getStatus(), Selector::Status::STARTED);
-    usleep(10000);
+    usleep(10000000);
 
     EXPECT_EQ(sel2.getStatus(), Selector::Status::FREE);
     EXPECT_EQ(sel.getStatus(), Selector::Status::FREE);
@@ -275,6 +281,8 @@ TEST(SelectorTest, interactionTest1) {
 
 TEST(SelectorTest, interactionTest2) {
     MParent2 parent;
+    MNode node;
+    parent.setParent(&node);
 
     MSelector sel(&parent);
     MSelector sel2(&parent);
@@ -284,7 +292,7 @@ TEST(SelectorTest, interactionTest2) {
 
     EXPECT_EQ(sel.checkSelection(),true);
     EXPECT_EQ(sel.getStatus(), Selector::Status::STARTED);
-    usleep(10000);
+    usleep(10000000);
 
     EXPECT_EQ(sel.getStatus(), Selector::Status::FREE);
     EXPECT_EQ(sel2.getStatus(), Selector::Status::FREE);
@@ -295,6 +303,9 @@ TEST(SelectorTest, interactionTest2) {
 
 TEST(SelectorTest, ScriptTest) {
     MParent2 parent;
+
+    MNode node;
+    parent.setParent(&node);
 
     MSelector sel(&parent);
     MSelector sel2(&parent);

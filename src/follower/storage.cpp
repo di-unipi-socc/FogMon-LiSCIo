@@ -120,7 +120,7 @@ std::vector<Report::test_result> Storage::getBandwidth(int64_t last, int sensiti
 
 void Storage::saveState(int64_t last, int sensitivity) {
     char *zErrMsg = 0;
-    char buf[1024];
+    char buf[2048];
     std::sprintf(buf,   "INSERT OR REPLACE INTO Nodes (id,ip,port, latencyTime, lastMeanL, lastVarianceL, bandwidthTime, bandwidthState, lastMeanB, lastVarianceB) "
                         " SELECT A.id AS id, A.ip AS ip, A.port AS port, A.latencyTime AS latencyTime, "
                         " L.mean AS lastMeanL, L.var AS lastVarianceL,"

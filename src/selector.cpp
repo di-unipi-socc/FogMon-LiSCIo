@@ -39,7 +39,7 @@ bool Selector::initSelection(int id) {
         return false;
     }
     printf("init selection true\n");
-    this->status = CHANGING;
+    this->status = CHANGING; // TODO: change after some time CHANGING to FREE if no calcSelection arrived
     return true;
 }
 
@@ -73,14 +73,13 @@ bool Selector::calcSelection(Message::node from, int id, bool &res) {
 
     //start thread to calculate and send
     this->selectionThread = thread([this,id,from]{
-
-        Message::leader_update sel = this->selection(id);
+        int formula = this->parent->node->leaderFormula;
+        Message::leader_update sel = this->selection(id, formula);
 
         if(!sel.empty()) {
             this->parent->getConnections()->sendSelection(sel,from);
         }
         {
-            const std::lock_guard<std::mutex> lock(this->selectionMutex);
             status = FREE;
         }
     });
@@ -113,21 +112,15 @@ bool Selector::checkSelection(bool doit) {
 
     bool check = false;
     int formula = this->parent->node->leaderFormula;
-    switch(formula) {
-        case -2:
-            check = sqrt(nF)*2 >= nL+1
-        break;
-        case -1:
-            check = sqrt(nF)/1.55 >= nL+1
-        break
-        case 0:
-        default:
-            if(formula > 0){
-                check = formula != nL
-            }else{
-                check = sqrt(nF) >= nL+1
-            }
-    }
+    if (formula == -2)
+        check = sqrt(nF)*2 >= nL+1;
+    else if (formula == -1)
+        check = sqrt(nF)/1.55 >= nL+1;
+    else if(formula > 0)
+        check = formula != nL;
+    else
+        check = sqrt(nF) >= nL+1;
+
 
     if(check) {
         printf("STARTING SELECTION (not enough nodes)\n");
@@ -189,8 +182,7 @@ void Selector::stopSelection() {
     printf("stopped selection\n");
 }
 
-Message::leader_update Selector::selection(int id) {
-    int formula = this->parent->node->leaderFormula;
+Message::leader_update Selector::selection(int id, int formula) {
     //calculate with a script the update and set the id on it
     const char *args[] = {"./scripts/cluster.py", std::to_string(formula).c_str(),NULL};
     ReadProc * proc = new ReadProc((char**)args);
@@ -289,7 +281,8 @@ void Selector::startSelection() {
         //start thread here
         this->selectionThread = thread([this]{
             auto t1 = std::chrono::high_resolution_clock::now();
-            Message::leader_update sel = this->selection(this->id);
+            int formula = this->parent->node->leaderFormula;
+            Message::leader_update sel = this->selection(this->id, formula);
 
             auto t2 = std::chrono::high_resolution_clock::now();
 
@@ -333,8 +326,6 @@ void Selector::startSelection() {
             this->parent->getConnections()->sendEndSelection(sel,true);
 
             {
-                const std::lock_guard<std::mutex> lock(this->selectionMutex);
-
                 status = FREE;
             }
             printf("preend selection\n");

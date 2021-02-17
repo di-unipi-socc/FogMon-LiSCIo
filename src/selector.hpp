@@ -37,7 +37,7 @@ public:
 
 protected:
 
-    virtual Message::leader_update selection(int id);
+    virtual Message::leader_update selection(int id, int formula = 0);
     virtual void startSelection();
 
     std::vector<Message::leader_update> updates;

@@ -66,6 +66,7 @@ TEST(StorageTest, SaveGetHardware) {
     hw.mean_free_cpu = 0.4;
     hw.memory = 10*1000*1000;
     hw.mean_free_memory = 1*1000*1000;
+    hw.lasttime = storage.getTime();
     storage.saveHardware(hw);
 
     Report::hardware_result hw2 = storage.getHardware();
@@ -209,6 +210,7 @@ TEST(StorageLeaderTest, AddGetNode) {
     hw.mean_free_cpu = 0.4;
     hw.memory = 10*1000*1000;
     hw.mean_free_memory = 1*1000*1000;
+    hw.lasttime = storage.getTime();
     storage.addNode(Message::node("1234321","::1","1234"),hw);
     std::vector<Message::node> res = storage.getNodes();
     int dim = 1;
@@ -231,6 +233,7 @@ TEST(StorageLeaderTest, FailNullRef) {
     hw.mean_free_cpu = 0.4;
     hw.memory = 10*1000*1000;
     hw.mean_free_memory = 1*1000*1000;
+    hw.lasttime = storage.getTime();
     storage.addNode(node_test,hw);
     storage.addNode(node_testt,hw);
     storage.addNode(node_testtt,hw);
@@ -297,6 +300,30 @@ TEST(StorageLeaderTest, AddGetMNode) {
         FAIL();
 }
 
+TEST(StorageLeaderTest, GetMLRHardware) {
+    LeaderStorage storage(nodeA);
+    storage.open("testB.db");
+    sleep(3);
+    Report::hardware_result hw;
+    hw.cores = 4;
+    hw.disk = 100*1000*1000;
+    hw.mean_free_disk = 10*1000*1000;
+    hw.mean_free_cpu = 0.4;
+    hw.memory = 10*1000*1000;
+    hw.mean_free_memory = 1*1000*1000;
+    hw.lasttime = storage.getTime();
+    storage.addNode(node_testt,hw);
+    storage.addNode(node_testtt,hw);
+
+    vector<Message::node> res = storage.getMLRHardware(2, 2);
+    int dim = 1;
+    EXPECT_EQ(dim, res.size());
+    if(res.size() == dim)
+        EXPECT_EQ("test", res[0].id);
+    else
+        FAIL();
+}
+
 TEST(StorageLeaderTest, GetHardware) {
     LeaderStorage storage(nodeA);
     storage.open("testB.db");
@@ -309,6 +336,7 @@ TEST(StorageLeaderTest, GetHardware) {
     hw.mean_free_cpu = 0.4;
     hw.memory = 10*1000*1000;
     hw.mean_free_memory = 1*1000*1000;
+    hw.lasttime = storage.getTime();
     storage.addNode(node_testt,hw);
     storage.addNode(nodeB1,hw,&nodeB); //node monitored by another MNode
 
@@ -329,29 +357,6 @@ TEST(StorageLeaderTest, GetHardware) {
     EXPECT_EQ(hw1.mean_free_cpu, hw.mean_free_cpu);
     EXPECT_EQ(hw1.mean_free_disk, hw.mean_free_disk);
     EXPECT_EQ(hw1.mean_free_memory, hw.mean_free_memory);
-}
-
-TEST(StorageLeaderTest, GetMLRHardware) {
-    LeaderStorage storage(nodeA);
-    storage.open("testB.db");
-    sleep(2);
-    Report::hardware_result hw;
-    hw.cores = 4;
-    hw.disk = 100*1000*1000;
-    hw.mean_free_disk = 10*1000*1000;
-    hw.mean_free_cpu = 0.4;
-    hw.memory = 10*1000*1000;
-    hw.mean_free_memory = 1*1000*1000;
-    storage.addNode(node_testt,hw);
-    storage.addNode(node_testtt,hw);
-
-    vector<Message::node> res = storage.getMLRHardware(2, 2);
-    int dim = 1;
-    EXPECT_EQ(dim, res.size());
-    if(res.size() == dim)
-        EXPECT_EQ("test", res[0].id);
-    else
-        FAIL();
 }
 
 TEST(StorageLeaderTest, ReportGetMLRLatency) {
@@ -453,6 +458,7 @@ TEST(StorageLeaderTest, Complete) {
     hw.mean_free_cpu = 0.4;
     hw.memory = 10*1000*1000;
     hw.mean_free_memory = 1*1000*1000;
+    hw.lasttime = storage.getTime();
     storage.addMNode(nodeB);
     storage.addNode(nodeB,hw,&nodeB);
     storage.addNode(nodeA,hw,&nodeA);
