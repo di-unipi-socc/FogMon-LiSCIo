@@ -15,5 +15,6 @@ Fed4Fire+/*.zip
 Fed4Fire+/*.xml
 Fed4Fire+/logs
 Fed4Fire+/*.json
+Fed4Fire/*.top
 __pycache__/
 *.pyc
