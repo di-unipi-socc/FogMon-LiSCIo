@@ -330,7 +330,7 @@ def startFogmonValgrind(ctx):
         session = "-s "+str(ctx.SPEC["session"])+" -i 131.114.72.76:8248"
     for conn in ctx.CONNS:
         if leader is None:
-            # sudo docker run -it --net=host diunipisocc/liscio-fogmon:test --leader
+            # sudo docker run -it --net=host diunipisocc/liscio-fogmon:test --leader -s 3 -i 131.114.72.76:8248
             conn.run(f"screen -d -m -S fogmon bash -c 'sudo docker run -it --net=host {images[1]} --leader {session} | tee log.txt'")
             leader = conn.original_host
         else:
@@ -341,12 +341,15 @@ def startFogmonValgrind(ctx):
 @task
 def startMonitor(ctx):
     script = """
-bmon -p $(ip route | grep default | sed -e 's/^.*dev.//' -e 's/.proto.*//') -r 1 -o format:fmt='$(element:name) $(attr:rxrate:bytes) $(attr:txrate:bytes)\\n' > bmon.log &
+bmon -r 1 -o format:fmt='$(element:name) $(attr:rxrate:bytes) $(attr:txrate:bytes)\\n' -p $(ip route | grep default | sed -e 's/^.*dev.//' -e 's/.proto.*//') > bmon.log &
 P1=$!
-psrecord $(pgrep dockerd) --interval 1 --log test.log &
+sudo docker stats --format '{{.Container}}\\t{{.CPUPerc}}\\t{{.MemUsage}}' > test.log &
 P2=$!
 wait $P1 $P2
 echo 'Done'
+    """
+    """sudo docker stats --format '{{.Container}}\\t{{.CPUPerc}}\\t{{.MemUsage}}' > stats.txt
+    psrecord $(pgrep dockerd) --interval 1 --log test.log
     """
     script = script.replace("$","\\$")
     staging(ctx)
@@ -368,7 +371,7 @@ def stopMonitor(ctx):
         conn.run("screen -S monitor -X stuff '0'`echo -ne $'\cc'` | screen -list | ps ax | grep 'bmon'")
     for conn in ctx.CONNS:
         host = conn.original_host
-        conn.get("test.log", host+"-psrecord.txt")
+        conn.get("test.log", host+"-cpu.txt")
         conn.get("bmon.log", host+"-bmon.txt")
         print(conn.original_host)
 
@@ -380,7 +383,7 @@ def sendFootprint(ctx):
     for conn in ctx.CONNS:
         host = conn.original_host
         bmon = host+"-bmon.txt"
-        psrecord = host+"-psrecord.txt"
+        psrecord = host+"-cpu.txt"
         files[bmon] = open(bmon,'rb')
         files[psrecord] = open(psrecord,'rb')
         print(conn.original_host)
@@ -392,12 +395,20 @@ def sendFootprint(ctx):
 
 
 @task
+def clearFogmon(ctx):
+    staging(ctx)
+    for conn in ctx.CONNS:
+        host = conn.original_host
+        conn.run("rm log.txt")
+        print(host)
+
+@task
 def gatherFogmon(ctx):
     staging(ctx)
     for conn in ctx.CONNS:
         host = conn.original_host
         conn.get("log.txt", host+"-log.txt")
-        print(conn.original_host)
+        print(host)
 
 @task
 def stopFogmon(ctx):
