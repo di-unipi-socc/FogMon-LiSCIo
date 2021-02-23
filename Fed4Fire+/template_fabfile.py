@@ -1,7 +1,8 @@
 from fabric import Connection, Config
-from fabric import task, SerialGroup
+from fabric import task, SerialGroup, ThreadingGroup
 from enum import Enum
 import json
+import time
 
 class TestBeds(str, Enum):
    WALL1 = "urn:publicid:IDN+wall1.ilabt.iminds.be+authority+cm"
@@ -41,10 +42,10 @@ docker = [
     "sudo apt-get install -y docker-ce docker-ce-cli containerd.io",
     f"sudo usermod -aG docker {user}",
     #"newgrp docker"
-    "sudo apt-get install -y python3-pip",
+    #"sudo apt-get install -y python3-pip",
     "sudo apt-get install -y bmon",
-    "sudo pip3 uninstall -y psrecord",
-    "sudo pip3 install psrecord matplotlib"
+    #"sudo pip3 uninstall -y psrecord",
+    #"sudo pip3 install psrecord matplotlib"
 ]
 
 vbox = [
@@ -121,6 +122,17 @@ def staging(ctx):
         conns = SerialGroup(*nodes,
             config = config)
         ctx.CONNS = conns
+    if "TCONNS" not in ctx:
+        config = Config(
+            overrides={
+                'ssh_config_path': "./ssh-config",
+                'load_ssh_configs': True,
+            }
+        )
+        nodes = [n for (n,v) in spec["nodes"].items()]
+        conns = ThreadingGroup(*nodes,
+            config = config)
+        ctx.TCONNS = conns
 
 def getIpv6s(ctx):
     # resolve ips
@@ -141,6 +153,7 @@ def pingtest(ctx):
 
 @task
 def setupNetwork(ctx):
+    print("setup network")
     staging(ctx)
     getIpv6s(ctx)
     spec = ctx.SPEC
@@ -214,6 +227,7 @@ def setupNetwork(ctx):
         
 @task
 def removeNetwork(ctx):
+    print("remove network")
     staging(ctx)
     spec = ctx.SPEC
     for conn in ctx.CONNS:
@@ -246,23 +260,66 @@ def removeNetwork(ctx):
         line = ""
         for comm in comms:
             line += f"sudo {comm}\n"
-        conn.run(f'echo \"{line}\" >> {file}')
+        conn.run(f'echo \"{line}\" > {file}')
         conn.run(f"screen -d -m -S network bash -c '{file}'")
 
 @task
 def setupDocker(ctx):
+    print("setup docker")
     staging(ctx)
     spec = ctx.SPEC
-    for conn in ctx.CONNS:
-        file = "/tmp/script621f37ffa.sh"
-        conn.run(f"> {file}")
-        print(f"created {file}")
-        conn.run(f"chmod +x {file}")
-        line = ""
-        for comm in docker:
-            line += f"{comm}\n"
-        conn.run(f'echo \'{line}\' >> {file}')
-        conn.run(f"screen -d -m -S docker bash -c '{file}'")
+    conn = ctx.TCONNS
+
+    file = "/tmp/script621f37ffa.sh"
+    conn.run(f"> {file}", hide=True)
+    conn.run(f"chmod +x {file}", hide=True)
+    line = ""
+    for comm in docker:
+        line += f"{comm}\n"
+    conn.run(f'echo \'{line}\' > {file}', hide=True)
+    conn.run(f"screen -d -m -S docker bash -c '{file}'", hide=True)
+
+    # for conn in ctx.CONNS:
+    #     file = "/tmp/script621f37ffa.sh"
+    #     conn.run(f"> {file}")
+    #     print(f"created {file}")
+    #     conn.run(f"chmod +x {file}")
+    #     line = ""
+    #     for comm in docker:
+    #         line += f"{comm}\n"
+    #     conn.run(f'echo \'{line}\' > {file}')
+    #     conn.run(f"screen -d -m -S docker bash -c '{file}'")
+
+@task
+def waitSetupDocker(ctx):
+    staging(ctx)
+    conn = ctx.TCONNS
+    while True:
+        results = conn.run("screen -S docker -Q select . > /dev/null 2>&1 ; echo $?", hide=True)
+        if len([r for r in results if int(results[r].stdout) != 1]) == 0:
+            break
+        print(len([r.original_host for r in results if int(results[r].stdout) != 1]),"\r",end="")
+        time.sleep(1)
+    print()
+    print("end setup docker")
+
+@task
+def setupAll(ctx):
+    staging(ctx)
+    setupNetwork(ctx)
+    conn = ctx.TCONNS
+    while True:
+        results = conn.run("screen -S network -Q select . > /dev/null 2>&1 ; echo $?", hide=True)
+        if len([r for r in results if int(results[r].stdout) != 1]) == 0:
+            break
+        time.sleep(1)
+    print("end setup network")
+
+    setupDocker(ctx)
+    waitSetupDocker(ctx)
+    
+    pullFogmon(ctx)
+    waitPullFogmon(ctx)
 
 @task
 def setupVbox(ctx):
@@ -276,33 +333,67 @@ def setupVbox(ctx):
                 print(f"created {file}")
                 conn.run(f"chmod +x {file}")
                 for comm in vbox:
-                    conn.run(f'echo \'{comm}\' >> {file}')
+                    conn.run(f'echo \'{comm}\' > {file}')
                 conn.run(f"screen -d -m -S vbox bash -c '{file}'")
 
 @task
 def pullFogmon(ctx):
+    print("pull fogmon")
     staging(ctx)
-    for conn in ctx.CONNS:
-        i=0
-        for image in images[:1]:
-            conn.run(f"screen -d -m -S fogmon-{i} bash -c 'sudo docker pull {image}'")
-            i+=1
-        print(conn.original_host)
+    conn = ctx.TCONNS
+
+    i=0
+    for image in images[:1]:
+        # sudo docker pull diunipisocc/liscio-fogmon:test
+        conn.run(f"screen -d -m -S fogmon-{i} bash -c 'sudo docker pull {image}'", hide=True)
+        i+=1
+
+    # for conn in ctx.CONNS:
+    #     i=0
+    #     for image in images[:1]:
+    #         conn.run(f"screen -d -m -S fogmon-{i} bash -c 'sudo docker pull {image}'")
+    #         i+=1
+    #     print(conn.original_host)
+
+@task
+def waitPullFogmon(ctx):
+    staging(ctx)
+    conn = ctx.TCONNS
+    for i in range(len(images)):
+        while True:
+            results = conn.run(f"screen -S fogmon-{i} -Q select . > /dev/null 2>&1 ; echo $?", hide=True)
+            if len([r for r in results if int(results[r].stdout) != 1]) == 0:
+                break
+            print(len([r.original_host for r in results if int(results[r].stdout) != 1]),"\r",end="")
+            time.sleep(1)
+    print()
+    print("end")
 
 @task
 def buildFogmon(ctx):
     staging(ctx)
-    for conn in ctx.CONNS:
-        file = "/tmp/script621f3765a.sh"
-        conn.run(f"> {file}")
-        print(f"created {file}")
-        conn.run(f"chmod +x {file}")
-        line = ""
-        for comm in githubFogmon:
-            line += f"{comm}\n"
-        conn.run(f'echo \'{line}\' >> {file}')
-        conn.run(f"screen -d -m -S githubFogmon bash -c '{file}'")
-        print(conn.original_host)
+
+    conn = ctx.TCONNS
+    file = "/tmp/script621f37ffa.sh"
+    conn.run(f"> {file}", hide=True)
+    conn.run(f"chmod +x {file}", hide=True)
+    line = ""
+    for comm in githubFogmon:
+        line += f"{comm}\n"
+    conn.run(f'echo \'{line}\' > {file}', hide=True)
+    conn.run(f"screen -d -m -S githubFogmon bash -c '{file}'", hide=True)
+
+    # for conn in ctx.CONNS:
+    #     file = "/tmp/script621f3765a.sh"
+    #     conn.run(f"> {file}")
+    #     print(f"created {file}")
+    #     conn.run(f"chmod +x {file}")
+    #     line = ""
+    #     for comm in githubFogmon:
+    #         line += f"{comm}\n"
+    #     conn.run(f'echo \'{line}\' > {file}')
+    #     conn.run(f"screen -d -m -S githubFogmon bash -c '{file}'")
+    #     print(conn.original_host)
 
 @task
 def startFogmon(ctx):
@@ -319,6 +410,42 @@ def startFogmon(ctx):
         else:
             # sudo docker run -it --net=host diunipisocc/liscio-fogmon:test -C node0
             conn.run(f"screen -d -m -S fogmon bash -c 'sudo docker run -it --net=host {images[0]} -C {leader} {session} | tee log.txt'")
+        print(conn.original_host)
+
+@task
+def startFogmonDefault(ctx):
+    staging(ctx)
+    leader = None
+    param_dict = {
+        "--time-report": 30,
+        "--time-tests": 30,
+        "--leader-check": 8,
+        "--time-latency": 30,
+        "--time-bandwidth": 600,
+        "--heartbeat": 90,
+        "--time-propagation": 20,
+        "--max-per-latency": 100,
+        "--max-per-bandwidth": 3,
+        "--sensitivity": 15,
+        "--hardware-window": 20,
+        "--latency-window": 10,
+        "--bandwidth-window": 5,
+        "-t": 5,
+    }
+    if "session" in ctx.SPEC:
+        param_dict["-s"] = ctx.SPEC["session"]
+        param_dict["-i"] = "131.114.72.76:8248"
+    params = ""
+    for param,val in param_dict.items():
+        params += f"{param} {val} "
+    for conn in ctx.CONNS:
+        if leader is None:
+            # sudo docker run -it --net=host diunipisocc/liscio-fogmon:test --leader
+            conn.run(f"screen -d -m -S fogmon bash -c 'sudo docker run -it --net=host {images[0]} --leader {params} | tee log.txt'")
+            leader = conn.original_host
+        else:
+            # sudo docker run -it --net=host diunipisocc/liscio-fogmon:test -C node0
+            conn.run(f"screen -d -m -S fogmon bash -c 'sudo docker run -it --net=host {images[0]} -C {leader} {params} | tee log.txt'")
         print(conn.original_host)
 
 @task
@@ -359,7 +486,7 @@ echo 'Done'
         conn.run(f"> {file}")
         print(f"created {file}")
         conn.run(f"chmod +x {file}")
-        conn.run(f"echo \"{script}\" >> {file}")
+        conn.run(f"echo \"{script}\" > {file}")
         conn.run(f"screen -d -m -S monitor bash -c '{file}'")
     pass
 
@@ -413,5 +540,16 @@ def gatherFogmon(ctx):
 @task
 def stopFogmon(ctx):
     staging(ctx)
-    for conn in ctx.CONNS:
-        conn.run("screen -S fogmon -X stuff '0'`echo -ne '\015'` | docker ps")
+
+    conn = ctx.TCONNS
+    conn.run("screen -S fogmon -X stuff '0'`echo -ne '\015'` | docker ps")
+    for i in range(30):
+        results = conn.run("screen -S fogmon -Q select . > /dev/null 2>&1 ; echo $?", hide=True)
+        if len([r for r in results if int(results[r].stdout) != 1]) == 0:
+            return
+        print("Retry...",end=" ",flush=True)
+        time.sleep(1)
+    print("Not terminated")
+
+    # for conn in ctx.CONNS:
+    #     conn.run("screen -S fogmon -X stuff '0'`echo -ne '\015'` | docker ps")

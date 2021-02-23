@@ -3,12 +3,9 @@ import random
 import math
 import pickle
 
-# session 2: seed 7574
-#
-random.seed(83476355) #TODO: change seed
+
 
 # TODO: display colors for groups
-# TODO: save topology for change
 
 class Node:
     def __init__(self,id):
@@ -139,7 +136,7 @@ class Topology:
             data = pickle.load(file)
             return data
 
-    def plot(self, leaders):
+    def plot(self, leaders, clusters = None):
         import matplotlib.pyplot as plt
         import networkx as nx
         import pydot
@@ -157,27 +154,74 @@ class Topology:
             return T
         T=print_tree(self.tree)
         pos = graphviz_layout(T, prog="dot")
-        nx.draw_networkx(T, pos, node_color=["yellow" if i in leaders else "pink" if i in self.selected else "#000000" for i in self.routers])
+        if clusters != None:
+            print(clusters)
+            color_map = {i:z/8+0.1 for z in range(len(clusters)) for i in self.selected if i in clusters[z]}
+            print(color_map)
+            colors = [color_map[i]-0.03 if i in leaders else color_map[i] if i in self.selected else 0 for i in self.routers]
+            print(colors)
+        else:
+            colors = ["yellow" if i in leaders else "pink" if i in self.selected else "#000000" for i in self.routers]
+        
+        nx.draw_networkx(T, pos, node_color=colors, cmap=plt.cm.hsv, vmin=0, vmax=1)
         nx.draw_networkx_edge_labels(T, pos)
         plt.show()
 
 if __name__ == "__main__":
-
+    # session 2: seed 7574
+    # session 3-4: seed 83476355
+    # session 5: seed 39  2-3-5-10
     from clusterer import Clusterer
+    for seed in range(200,1000):
+        random.seed(seed)
+        if seed % 50 ==0:
+            print(f"{seed}\r", flush=True, end="")
+        topology = Topology()
+        num = 20
+        if num>60:
+            mul = 1
+            mul1 = 1
+        elif num>40:
+            mul = 0
+            mul1 =1
+        else:
+            mul = 0
+            mul1 = 0
+        branch_out =    [2]*mul     + [2+mul1,3+mul1,1,3,3,1]
+        latency =       [(0,1)]*mul + [(1,3),(1,3),(1,30),(1,5),(1,5)]
+        bandwidth =     [(0,1)]*mul + [(70000,200000),(50000,100000),(10000,100000),(10000,100000),(10,100000)]
+        topology.create_tree(6+mul,branch_out,(latency,bandwidth))
+        selected = []
+        cloud_high = random.sample(topology.return_level(2+mul),  num//10) # Central cloud         3
+        cloud_low = random.sample(topology.return_level(3+mul),   round(num/(20/3))) # Decentralised cloud   5
+        isp = random.sample(topology.return_level(4+mul),         num//4) # ISP                   12
+        home = random.sample(topology.return_level(5+mul),        num//2) # Home                 20
+                                                        # =32                        =40
+        selected = cloud_high + cloud_low + isp + home
 
-    topology = Topology()
-    topology.create_tree(6,[2,3,2,3,2,1],([(10,20),(1,5),(1,10),(1,30),(1,10)],[(70000,200000),(50000,100000),(10000,100000),(10000,100000),(10,100000)]))
-    selected = []
-    cloud_high = random.sample(topology.return_level(2),  1) # Central cloud         3
-    cloud_low = random.sample(topology.return_level(3),   2) # Decentralised cloud   5
-    isp = random.sample(topology.return_level(4),         2) # ISP                   12
-    home = random.sample(topology.return_level(5),        2) # Home                 20
-                                                    # =32                        =40
-    selected = cloud_high + cloud_low + isp + home
+        
+        topology.purge(selected)
 
+        M = topology.matrix(selected)
+        for i in selected:
+            for j in selected:
+                if i==j:
+                    continue
+                if M[0][i][j] == 0:
+                    print(i,M[i])
+       
+
+        clusterer = Clusterer([selected[0]],selected,M[0])
+            
+        data = clusterer.cluster(10)
+        
+        dim = len(selected)
+        for c in data["clusters"]:
+            if dim > len(c):
+                dim = len(c)
+        if ((dim > math.sqrt(len(selected))/2 +1 and num <= 40) or (dim > math.sqrt(len(selected))/2 and num > 40)) and data["quality"] < 1:
+            break
     print(len(selected))
-    topology.purge(selected)
-
     N1 = 4
     N2 = 5
     path = topology.search_path(selected[N1])
@@ -186,32 +230,14 @@ if __name__ == "__main__":
     print(path2)
     print(topology.sum_path(selected[N1],selected[N2]))
     print(topology.id)
-
-    M = topology.matrix(selected)
-    for i in selected:
-        for j in selected:
-            if i==j:
-                continue
-            if M[0][i][j] == 0:
-                print(i,M[i])
-
-    min = 10
-    data = None
-    for _ in range(100):
-        clusterer = Clusterer([selected[0]],selected,M[0])
-            
-        data_ = clusterer.cluster()
-        if data_["quality"] < min:
-            min = data_["quality"]
-            data = data_
-    
+    print(f"seed: {seed}")
     #TODO insert colors for clusters
     print(data)
-    topology.plot(data["new_leaders"])
+    topology.plot(data["new_leaders"], data["clusters"])
     print("save?")
     y = input()
     if y in ["yes","y"]:
-        topology.save("topology")
+        topology.save(f"topology-{num}-{seed}")
         from spec import Spec
         from template_fabfile import TestBeds, Ubuntu
         import json
@@ -219,7 +245,7 @@ if __name__ == "__main__":
         for i in selected:
             latencies = [M[0][i][j] for j in selected]
             uploads = [M[1][i][j] for j in selected]
-            testbed = TestBeds.WALL2 if i not in home else TestBeds.CITY
+            testbed = TestBeds.WALL1 if i not in home else TestBeds.WALL1
             matrix.append((latencies,uploads,testbed))
         spec = Spec()
 
@@ -243,4 +269,12 @@ if __name__ == "__main__":
 
         # save the spec.json
         with open("spec.json","w") as wr:
+            json.dump(spec.spec, wr)
+
+        # save the xml spec
+        with open(f"spec-xml-{num}-{seed}","w") as wr:
+            wr.write(spec.print_spec())
+
+        # save the spec.json
+        with open(f"spec-json-{num}-{seed}","w") as wr:
             json.dump(spec.spec, wr)

@@ -53,34 +53,48 @@ class Clusterer:
         else:
             self.initial_medoids = random.sample([self.D[i] for i in self.Leaders],k=k)
 
-    def cluster(self):
+    def cluster(self, tries=1):
+        mini = math.inf
+        data = None
+        for _ in range(tries):
 
-        # create K-Medoids algorithm for processing distance matrix instead of points
-        kmedoids_instance = kmedoids(self.A, self.initial_medoids, data_type='distance_matrix')
-        # run cluster analysis and obtain results
-        kmedoids_instance.process()
-        medoids = kmedoids_instance.get_medoids()
-        clusters = kmedoids_instance.get_clusters()
-        q = quality(self.A,clusters,medoids)
+            # create K-Medoids algorithm for processing distance matrix instead of points
+            kmedoids_instance = kmedoids(self.A, self.initial_medoids, data_type='distance_matrix')
+            # run cluster analysis and obtain results
+            kmedoids_instance.process()
+            medoids = kmedoids_instance.get_medoids()
+            clusters = kmedoids_instance.get_clusters()
+            q = quality(self.A,clusters,medoids)
 
+            if q < mini:
+                mini = q
 
+                new_leaders = []
 
-        new_leaders = []
+                for i in self.D:
+                    if self.D[i] in medoids:
+                        new_leaders.append(i)
+                
+                changes = 0
 
-        for i in self.D:
-            if self.D[i] in medoids:
-                new_leaders.append(i)
-        
-        changes = 0
+                for i in new_leaders:
+                    if i not in self.Leaders:
+                        changes+=1
 
-        for i in new_leaders:
-            if i not in self.Leaders:
-                changes+=1
+                inv = {v:k for k,v in self.D.items()}
 
-        data = {
-            "quality": q,
-            "new_leaders": new_leaders,
-            "changes": changes
-            }
+                clusts = []
 
+                for c in clusters:
+                    clust = []
+                    for el in c:
+                        clust.append(inv[el])
+                    clusts.append(clust)
+
+                data = {
+                    "quality": q,
+                    "new_leaders": new_leaders,
+                    "changes": changes,
+                    "clusters": clusts
+                    }
         return data
