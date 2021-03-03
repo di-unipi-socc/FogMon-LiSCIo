@@ -5,7 +5,7 @@ from zipfile import ZipFile
 import json
 import requests
 
-if len(sys.argv)!=3:
+if len(sys.argv)<=2:
    print("use: script.py spec.json filezip.zip")
    exit()
 
@@ -52,3 +52,15 @@ else:
 
 with open("build/spec.json","w") as wr:
    json.dump(spec, wr)
+
+# try:
+#    from topology import Topology
+#    topology = Topology.load(sys.argv[2])
+#    topology.save("build/topology")
+
+#    with open("topology.py","r") as rd:
+#       with open("build/topology.py","w") as wr:
+#          for line in rd.readlines():
+#             wr.write(line)
+# except:
+#    raise

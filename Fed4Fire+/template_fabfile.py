@@ -20,6 +20,7 @@ enable_nat = ["wget -O - -nv https://www.wall2.ilabt.iminds.be/enable-nat.sh | s
 
 images = [
     "diunipisocc/liscio-fogmon:test",
+    "diunipisocc/liscio-fogmon:test2",
     "diunipisocc/liscio-fogmon:valgrind"
 ]
 
@@ -42,10 +43,7 @@ docker = [
     "sudo apt-get install -y docker-ce docker-ce-cli containerd.io",
     f"sudo usermod -aG docker {user}",
     #"newgrp docker"
-    #"sudo apt-get install -y python3-pip",
     "sudo apt-get install -y bmon",
-    #"sudo pip3 uninstall -y psrecord",
-    #"sudo pip3 install psrecord matplotlib"
 ]
 
 vbox = [
@@ -542,7 +540,7 @@ def stopFogmon(ctx):
     staging(ctx)
 
     conn = ctx.TCONNS
-    conn.run("screen -S fogmon -X stuff '0'`echo -ne '\015'` | docker ps")
+    conn.run("screen -S fogmon -X stuff '0'`echo -ne '\015'` | sudo docker ps")
     for i in range(30):
         results = conn.run("screen -S fogmon -Q select . > /dev/null 2>&1 ; echo $?", hide=True)
         if len([r for r in results if int(results[r].stdout) != 1]) == 0:
@@ -553,3 +551,236 @@ def stopFogmon(ctx):
 
     # for conn in ctx.CONNS:
     #     conn.run("screen -S fogmon -X stuff '0'`echo -ne '\015'` | docker ps")
+
+
+def genSession(spec):
+    spec["id"] += 1
+    import requests
+    r = requests.post("http://131.114.72.76:8248/testbed", json=spec)
+    if r.status_code != 201:
+        raise Exception("connection error")
+    session = r.json()["session"]
+    spec["session"] = session
+    print("session",session)        
+    return session
+
+def removeData(session):
+    import requests
+    r = requests.get(f"http://131.114.72.76:8248/testbed/{session}/remove")
+    if r.status_code != 200:
+        raise Exception("connection error")
+
+def generateMoment(session, spec):
+    import requests
+    r = requests.post(f"http://131.114.72.76:8248/testbed/{session}", json=spec)
+    if r.status_code != 201:
+        raise Exception("connection error")
+
+def startFogmonParams(config, ctx):
+    leader = None
+    if "session" in ctx.SPEC:
+        config["-s"] = ctx.SPEC["session"]
+        config["-i"] = "131.114.72.76:8248"
+    params = ""
+    for param,val in config.items():
+        params += f"{param} {val} "
+    for conn in ctx.CONNS:
+        if leader is None:
+            # sudo docker run -it --net=host diunipisocc/liscio-fogmon:test --leader
+            conn.run(f"screen -d -m -S fogmon bash -c 'sudo docker run -it --net=host {images[0]} --leader {params} | tee log.txt'")
+            leader = conn.original_host
+        else:
+            # sudo docker run -it --net=host diunipisocc/liscio-fogmon:test -C node0
+            conn.run(f"screen -d -m -S fogmon bash -c 'sudo docker run -it --net=host {images[0]} -C {leader} {params} | tee log.txt'")
+        print(conn.original_host)
+
+def waitStability(session):
+    import requests
+    stable = False
+    while not stable:
+        time.sleep(60)
+        try:
+            r = requests.get(f"http://131.114.72.76:8248/testbed/{session}/accuracy")
+            if r.status_code != 200:
+                raise Exception("connection error")
+            moments = r.json()["data"]
+            moment = moments[-1]
+            if "yes" in moment["stable"]:
+                stable = True
+        except:
+            pass
+
+def getLeaders(session):
+    import requests
+    r = requests.get(f"http://131.114.72.76:8248/testbed/{session}")
+    if r.status_code != 200:
+        raise Exception("connection error")
+    data = r.json()["data"]
+    leaders = [v["ip"] for v in data["Leaders"]["update"]["selected"]]
+    return leaders
+    
+
+def killLeaders(num, ctx, moment=True):
+    spec = ctx.SPEC
+    session = spec["session"]
+    
+    leaders = getLeaders(session)
+    import random
+    toKill = random.sample(leaders,num)
+    
+    #remove leaders
+
+    if moment:
+        generateMoment(session, spec)
+
+    config = Config(
+        overrides={
+            'ssh_config_path': "./ssh-config",
+            'load_ssh_configs': True,
+        }
+    )
+    conns = ThreadingGroup(*toKill,
+            config = config)
+
+    conns.run("screen -S fogmon -X stuff '0'`echo -ne '\015'` | sudo docker ps")
+    for i in range(30):
+        results = conns.run("screen -S fogmon -Q select . > /dev/null 2>&1 ; echo $?", hide=True)
+        if len([r for r in results if int(results[r].stdout) != 1]) == 0:
+            return
+        time.sleep(1)
+
+def killLeadersExcept(num, ctx, moment=True):
+    pass
+
+def killNodes(num, ctx, moment=True):
+    pass
+
+def restoreNodes(nodes, ctx, moment=True):
+    pass
+
+def restrictBandwidth(percentage, bandwidthMB, ctx, moment=True):
+    pass
+
+def increaseLatency(percentage, latency, ctx, moment=True):
+    pass
+
+def isolateGroups(num, ctx, moment=True):
+    pass
+
+def restoreLinks(links, ctx):
+    pass
+
+@task
+def startExperiments(ctx):
+    staging(ctx)
+
+    num = len(ctx.SPEC["nodes"])
+    print(f"nodes: {num}")
+    
+    configs = {
+        "default": {   
+            "--time-report": 30,
+            "--time-tests": 30,
+            "--leader-check": 8,
+            "--time-latency": 30,
+            "--time-bandwidth": 600,
+            "--heartbeat": 90,
+            "--time-propagation": 20,
+            "--max-per-latency": 100,
+            "--max-per-bandwidth": 3,
+            "--sensitivity": 15,
+            "--hardware-window": 20,
+            "--latency-window": 10,
+            "--bandwidth-window": 5,
+            "-t": 5,
+        },
+        "reactive": {   
+            "--time-report": 20,
+            "--time-tests": 20,
+            "--leader-check": 4,
+            "--time-latency": 20,
+            "--time-bandwidth": 300,
+            "--heartbeat": 60,
+            "--time-propagation": 10,
+            "--max-per-latency": 100,
+            "--max-per-bandwidth": 3,
+            "--sensitivity": 10,
+            "--hardware-window": 10,
+            "--latency-window": 5,
+            "--bandwidth-window": 3,
+            "-t": 5,
+        },
+        "more reactive": {   
+            "--time-report": 10,
+            "--time-tests": 10,
+            "--leader-check": 2,
+            "--time-latency": 10,
+            "--time-bandwidth": 60,
+            "--heartbeat": 30,
+            "--time-propagation": 5,
+            "--max-per-latency": 100,
+            "--max-per-bandwidth": 3,
+            "--sensitivity": 5,
+            "--hardware-window": 5,
+            "--latency-window": 3,
+            "--bandwidth-window": 3,
+            "-t": 5,
+        }
+    }
+    sessions = {}
+
+    for name,config in configs.items():
+        session = genSession(ctx.SPEC)
+        sessions[session] = {"num": num, "name": name, "version": 1}
+        removeData(session)
+
+        startFogmonParams(config, ctx)
+        waitStability(session)
+
+        els = killLeaders(1, ctx)
+        waitStability(session)
+        restoreNodes(els, ctx)
+        waitStability(session)
+
+        els = killLeadersExcept(1, ctx)
+        waitStability(session)
+        restoreNodes(els, ctx)
+        waitStability(session)
+
+        els = killNodes(num//4, ctx)
+        waitStability(session)
+        restoreNodes(els, ctx)
+        waitStability(session)
+
+        els = killNodes(num//2, ctx)
+        waitStability(session)
+        restoreNodes(els, ctx)
+        waitStability(session)
+        stopFogmon(ctx)
+
+        with open("build/sessions.json","w") as wr:
+            json.dump(sessions, wr)
+        
+        links = restrictBandwidth(10,0.1, ctx, moment=False)
+        session = genSession(ctx.SPEC)
+        sessions[session] = {"num": num, "name": name, "version": 1}
+        removeData(session)
+
+        startFogmonParams(config)
+        waitStability(session)
+        restoreLinks(links, ctx)
+        waitStability(session)
+
+        links = increaseLatency(25,500, ctx)
+        waitStability(session)
+        restoreLinks(links, ctx)
+        waitStability(session)
+
+        links = isolateGroups(1, ctx)
+        waitStability(session)
+        restoreLinks(links, ctx)
+        waitStability(session)
+        stopFogmon(ctx)
+
+        with open("build/sessions.json","w") as wr:
+            json.dump(sessions, wr)

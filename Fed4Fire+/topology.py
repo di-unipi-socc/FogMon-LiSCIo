@@ -11,7 +11,7 @@ class Node:
     def __init__(self,id):
         self.id = id
         self.childs = []
-        self.costs = []
+        self.costs = [] # list of (ms,kbit)
     
     def add_child(self,node, cost):
         self.childs.append(node)
@@ -24,6 +24,7 @@ class Node:
 class Topology: 
     def __init__(self):
         self.id = 0
+        self.tree = None
 
     def create_tree_(self,n,l, costs):
         id = self.id
@@ -57,39 +58,37 @@ class Topology:
         for i in expanded:
             selected.append(i.id)
         return selected
-
-    def search_path_(self,tree, id):
-        if tree.id == id:
-            return ([id],[])
-        if not tree.childs:
-            return None
-        for child,cost in zip(tree.childs,tree.costs):
-            res = self.search_path_(child,id)
-            if res is not None:
-                return ([tree.id]+res[0], [cost]+res[1])
     
     def search_path(self, id):
-        return self.search_path_(self.tree,id)
-    
-    def purge_(self, tree, els):
-        remove = []
-        for i in range(len(tree.childs)):
-            if tree.childs[i].id not in els:
-                remove.append(i-len(remove))
-        
-        for i in remove:    
-            tree.remove_child(i)
-        
-        for child in tree.childs:
-            self.purge_(child, els)
+        def search_path_(tree, id):
+            if tree.id == id:
+                return ([id],[])
+            if not tree.childs:
+                return None
+            for child,cost in zip(tree.childs,tree.costs):
+                res = search_path_(child,id)
+                if res is not None:
+                    return ([tree.id]+res[0], [cost]+res[1])
+        return search_path_(self.tree,id)
 
     def purge(self, selected):
+        def purge_(tree, els):
+            remove = []
+            for i in range(len(tree.childs)):
+                if tree.childs[i].id not in els:
+                    remove.append(i-len(remove))
+            
+            for i in remove:    
+                tree.remove_child(i)
+            
+            for child in tree.childs:
+                purge_(child, els)
         self.selected = selected
         els = []
         for id in selected:
             path = self.search_path(id)
             els+=path[0]
-        self.purge_(self.tree,els)
+        purge_(self.tree,els)
         els.sort()
         self.routers = list(dict.fromkeys(els))
         return self.routers
@@ -126,6 +125,17 @@ class Topology:
                 M[1][i][j] = cost[1]
         return M
     
+    def modify_links(self, percentage, B, L):
+        def modify_links_(node):
+            for i in range(len(node.childs)):
+                child = node.childs[i]
+                r = random.randint(1,100)
+                if r<=percentage:
+                    node.costs[i] = (L,B)
+                modify_links_(child)
+        modify_links_(self.tree)
+
+
     def save(self, path):
         with open(path,"wb") as file:
             pickle.dump(self, file)
@@ -168,16 +178,14 @@ class Topology:
         plt.show()
 
 if __name__ == "__main__":
-    # session 2: seed 7574
-    # session 3-4: seed 83476355
-    # session 5: seed 39  2-3-5-10
+    import sys
     from clusterer import Clusterer
-    for seed in range(200,1000):
+    for seed in range(500,1000):
         random.seed(seed)
         if seed % 50 ==0:
             print(f"{seed}\r", flush=True, end="")
         topology = Topology()
-        num = 20
+        num = int(sys.argv[1])
         if num>60:
             mul = 1
             mul1 = 1
@@ -241,27 +249,7 @@ if __name__ == "__main__":
         from spec import Spec
         from template_fabfile import TestBeds, Ubuntu
         import json
-        matrix = []
-        for i in selected:
-            latencies = [M[0][i][j] for j in selected]
-            uploads = [M[1][i][j] for j in selected]
-            testbed = TestBeds.WALL1 if i not in home else TestBeds.WALL1
-            matrix.append((latencies,uploads,testbed))
-        spec = Spec()
-
-        # this take the matrix and create the nodes
-        for row in matrix:
-            spec.create_nodes(1, row[2])
-
-        # instantiate the links
-        spec.create_links()
-
-        # set the link informations
-        for i in range(len(matrix)):
-            for j in range(len(matrix)):
-                if i == j:
-                    continue
-                spec.setLinkLatCap(i,j,matrix[i][0][j],matrix[i][1][j])
+        spec = Spec(topology=topology)
 
         # save the xml spec
         with open("spec.xml","w") as wr:

@@ -2,11 +2,14 @@ from template_fabfile import TestBeds, Ubuntu
 
 class Spec:
 
-   def __init__(self):
+   def __init__(self, topology=None):
       self.start = """<?xml version='1.0'?>
       <rspec xmlns="http://www.geni.net/resources/rspec/3" type="request" generated_by="jFed RSpec Editor" generated="2020-11-30T18:35:22.186+01:00" xmlns:emulab="http://www.protogeni.net/resources/rspec/ext/emulab/1" xmlns:delay="http://www.protogeni.net/resources/rspec/ext/delay/1" xmlns:jfed-command="http://jfed.iminds.be/rspec/ext/jfed-command/1" xmlns:client="http://www.protogeni.net/resources/rspec/ext/client/1" xmlns:jfed-ssh-keys="http://jfed.iminds.be/rspec/ext/jfed-ssh-keys/1" xmlns:jfed="http://jfed.iminds.be/rspec/ext/jfed/1" xmlns:sharedvlan="http://www.protogeni.net/resources/rspec/ext/shared-vlan/1" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.geni.net/resources/rspec/3 http://www.geni.net/resources/rspec/3/request.xsd ">"""
       self.end = "</rspec>"
       self.spec = {"nodes": {}, "links": {}}
+      
+      if topology is not None:
+         self.create_from_topology(topology)
 
    _id_node_ = 0
    def create_id_node(self):
@@ -106,45 +109,53 @@ class Spec:
       y = 0
       for n,v in nodes.items():
          text+= '<node client_id="%s" exclusive="true" component_manager_id="%s">\n<sliver_type name="raw-pc">\n<disk_image name="%s"/>\n</sliver_type>\n'%(n,v["testbed"].value,v["image"].value)
-         #text+= '<node client_id="%s" exclusive="true" component_manager_id="%s">\n<sliver_type name="raw-pc">\n</sliver_type>\n'%(n,v["testbed"].value)
          text+= '<location xmlns="http://jfed.iminds.be/rspec/ext/jfed/1" x="%d" y="%d"/>\n'%(x,y)
          x+=10
          y+=10
-         # for (interface,ip,same_testbed) in v["if"]:
-         #    if same_testbed and v["testbed"] != TestBeds.CITY:
-         #       text+= '<interface client_id="%s:%s">\n'%(n,interface)
-         #       text+= '<ip address="10.%d.%d.%d" netmask="255.255.255.0" type="ipv4"/>\n</interface>'%(ip//256, ip%256,int(n[4:])+1)
-         
-         # text+= '<services>\n'
-         # if v["testbed"] != TestBeds.CITY:
-         #    for s in enable_nat:
-         #       text+= f'<execute shell="sh" command="{s}"/>\n'
-         # for s in docker:
-         #    text+= f'<execute shell="sh" command="{s}"/>\n'
-         # text+= '</services>\n
          text+= '</node>\n'
-
-      # for l,v in links.items():
-      #    if v["testbed"] != TestBeds.CITY:
-      #       if v["same_testbed"]:
-      #          text+= '<link client_id="%s">\n<component_manager name="%s"/>\n'%(l,v["testbed"].value)
-      #          for interface in v["interfaces"]:
-      #             text+= '<interface_ref client_id="%s"/>\n'%interface
-      #          text+= '<link_type name="%s"/>\n'%v["link_type"]
-               
-      #          for interface1 in v["interfaces"]:
-      #             for interface2 in v["interfaces"]:
-      #                if not("capacity" in v or "latency" in v or "packet_loss" in v) or interface1 == interface2:
-      #                   continue
-      #                text+= '<property source_id="%s" dest_id="%s"'%(interface1, interface2)
-      #                if "capacity" in v:
-      #                   text+= ' capacity="%d"'%v["capacity"]
-      #                if "latency" in v:
-      #                   text+= ' latency="%d"'%(v["latency"]/2)
-      #                if "packet_loss" in v:
-      #                   text+= ' packet_loss="%s"'%v["packet_loss"]
-      #                text+= '/>\n'
-      #          text+= '</link>'
       
       text+=self.end
       return text
+   
+   def create_from_topology(self, topology):      
+      selected = topology.selected
+      M = topology.matrix(selected)
+
+      matrix = []
+      m = 0
+      for i in selected:
+         latencies = [M[0][i][j] for j in selected]
+         uploads = [M[1][i][j] for j in selected]
+         if m < len(selected)/2:
+            testbed = TestBeds.WALL1 # TODO: decide testbed
+         else:
+            testbed = TestBeds.WALL1
+         matrix.append((latencies,uploads,testbed))
+
+      # this take the matrix and create the nodes
+      for row in matrix:
+         self.create_nodes(1, row[2])
+
+      # instantiate the links
+      self.create_links()
+
+      # set the link informations
+      for i in range(len(matrix)):
+         for j in range(len(matrix)):
+               if i == j:
+                  continue
+               self.setLinkLatCap(i,j,matrix[i][0][j],matrix[i][1][j])
+   
+   def remove_nodes(self, removes):
+      # remove nodes from json, example: ["10","0"]
+
+      for remove in removes:
+         del self.spec["nodes"][remove]
+         rms = []
+         for l,v in self.spec["links"].items():
+            n1 = v["interfaces"][0].split(":")[0]
+            n2 = v["interfaces"][1].split(":")[0]
+            if n1 == remove or n2 == remove:
+               rms.append(l)
+         for rm in rms:
+            del self.spec["links"][rm]
