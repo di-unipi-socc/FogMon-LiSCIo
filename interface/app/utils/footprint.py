@@ -23,10 +23,11 @@ def compute_footprint(session):
                 v["mean"] += val
             time += len(data["cpu"])
         v["mean"] /= time
-    return footprint
+    return [footprint]
 
 def save_footprints(files,session):
-    spec = get_spec(session)    
+    spec = get_spec(session)
+    moment = len(spec["specs"])
     Nodes = [k for k,v in spec["specs"][0]["nodes"].items()]
 
     datas = {}
@@ -55,7 +56,6 @@ def save_footprints(files,session):
                 tx = r[1]
                 data["rx"].append(rx)
                 data["tx"].append(tx)
-        logging.info(data)
         logging.info(len(data["cpu"]))
         logging.info(len(data["tx"]))
         data["tx"] = data["tx"][1:]

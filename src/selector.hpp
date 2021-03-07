@@ -33,7 +33,7 @@ public:
 
     //check if a selections is needed
     //if doit is true start the selection anyway
-    virtual bool checkSelection(bool doit = false);
+    virtual bool checkSelection(bool quality = true, bool doit = false);
 
 protected:
 

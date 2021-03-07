@@ -6,6 +6,7 @@
 #include <cstdio>
 #include <time.h>
 #include <unistd.h>
+#include <iostream>
 #include <string>
 #include <math.h>
 
@@ -112,9 +113,10 @@ void Leader::timerFun() {
     int iter = 1;
     while(this->running) {
         //routine for Nodes
+        auto t_start = std::chrono::high_resolution_clock::now();
         
         //check database for reports
-        vector<Message::node> ips = this->getStorage()->getMLRHardware(100, this->node->timeheartbeat*3);
+        vector<Message::node> ips = this->getStorage()->getMLRHardware(100, this->node->timeheartbeat);
         vector<Message::node> rem;
         for(auto&& node : ips) {
             bool res = this->connections->sendRequestReport(node);
@@ -123,13 +125,34 @@ void Leader::timerFun() {
                 rem.push_back(node);
             }
         }
+
         //remove the nodes that failed to respond
-        this->connections->sendRemoveNodes(ips);
+        this->connections->sendRemoveNodes(rem);
         vector<Message::node> tmp;
-        this->getStorage()->updateNodes(tmp,rem);        
+        this->getStorage()->updateNodes(tmp,rem);   
 
         //routine for LeaderNodes
         ips = this->getStorage()->getMNodes();
+
+        int num = ips.size();
+        if (num<1)
+            num = 1;
+        int time = (int)(this->node->timePropagation*( log2(num)*3+2 ));
+        if (iter < 20) {
+            time += this->node->timePropagation*10;
+        }
+        printf("Check old nodes %d\n",time);
+        
+        rem = this->getStorage()->removeOldLNodes(time); // remove old leaders that do not update in a logarithmic time
+        tmp = this->getStorage()->removeOldNodes(this->node->timeheartbeat); // remove followers that do not update in heartbeat time
+        //inform other nodes of the removals
+        rem.insert(rem.end(),tmp.begin(),tmp.end());
+        if (rem.size() > 0) {
+            this->connections->sendRemoveNodes(rem);
+            tmp.clear();
+            this->getStorage()->updateNodes(tmp,rem);
+        }
+
         int i=0;
         int sent=0;
         while(i < ips.size() && sent < 1) {
@@ -139,18 +162,14 @@ void Leader::timerFun() {
             }
             
             vector<Report::report_result> report = this->getStorage()->getReport();
+
             if(this->connections->sendMReport(ips[i], report)) {
                 sent++;
-                printf("Sending to Leader: %s\n",ips[i].ip.c_str());
+                printf("Sent to Leader: %s\n",ips[i].ip.c_str());
             }
             i++;
         }
 
-        if(iter % 1 == 0) { // every n cycles check what to delete
-            this->getStorage()->removeOldLNodes(this->node->timePropagation*(log2(ips.size())+2)); // remove old leaders that do not update in a logarithmic time
-            this->getStorage()->removeOldNodes(this->node->timeheartbeat*3); // remove followers that do not update in 3 heartbeat time
-        }
-        
         if(iter % 4 == 0) {
             this->getStorage()->complete();
             {
@@ -158,12 +177,23 @@ void Leader::timerFun() {
                 UIConnection conn(this->getMyNode(),this->node->interfaceIp, this->node->session);
                 conn.sendTopology(report);
             }
-            if(iter % 12 == 0)
-                this->selector.checkSelection();
+            if((iter % (4*1)) == 0) {
+                bool param = iter % (4*2*6) == 0;
+                this->selector.checkSelection(param);
+            }
         }
 
+        auto t_end = std::chrono::high_resolution_clock::now();
+        auto elapsed_time = std::chrono::duration_cast<std::chrono::duration<float>>(t_end-t_start).count();
+        //std::cout << "timerFun1: "<< elapsed_time << " s"<< endl;
+        int sleeptime = this->node->timePropagation-elapsed_time;
+        if (sleeptime > 0)
+            sleeper.sleepFor(chrono::seconds(sleeptime));
         iter++;
-        sleeper.sleepFor(chrono::seconds(this->node->timePropagation));
+        
+        //t_end = std::chrono::high_resolution_clock::now();
+        //elapsed_time = std::chrono::duration_cast<std::chrono::duration<float>>(t_end-t_start).count();
+        //std::cout << "timerFun2: "<< elapsed_time << " s"<< endl;
     }
 }
 
@@ -191,7 +221,7 @@ bool Leader::setParam(std::string name, int value) {
         return true;
     
     if(name == string("start-selection")) {
-        this->selector.checkSelection(true);
+        this->selector.checkSelection(true,true);
     }
     
     printf("Param %s: %d\n",name.c_str(),value);
@@ -216,13 +246,22 @@ void Leader::changeRole(vector<Message::node> leaders) {
             printf("      %s %s %s\n",node.id.c_str(), node.ip.c_str(), node.port.c_str());
         }
     }
+    printf("A\n");
+    fflush(stdout);
     this->storage->removeChangeRole(leaders);
+    printf("B\n");
+    fflush(stdout);
+    this->selector.stopSelection();
     if(!present) {
+        printf("C\n");
+        fflush(stdout);
         this->node->setMNodes(leaders);
+        printf("D\n");
+        fflush(stdout);
         this->node->demote();
-    }else {
-        this->selector.stopSelection();
-        
+        printf("E\n");
+        fflush(stdout);
+    }else {        
         sleeper.sleepFor(chrono::seconds(10));
 
         for(auto ip : leaders) {

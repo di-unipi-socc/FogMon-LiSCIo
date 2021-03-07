@@ -15,6 +15,8 @@
 
 #include <unistd.h>
 
+#include <chrono>
+
 #include <sys/types.h>
 #include <sys/un.h>
 #include <string>
@@ -40,19 +42,24 @@ void LeaderConnections::handler(int fd, Message &m) {
     if(m.getType() == Message::Type::MREQUEST) {
         if(m.getCommand() == Message::Command::SET) {
             if(m.getArgument() == Message::Argument::REPORT) {
+
                 handled = true;
                 Report r;
+
+                // Too long reponding
+                Message res;
+                res.setType(Message::Type::MRESPONSE);
+                res.setCommand(Message::Command::SET);
+                res.setArgument(Message::Argument::POSITIVE);
+
+                sendMessage(fd, res);
+
+                // Do this in another thread
                 if(m.getData(r)) {
                     vector<Report::report_result> results;
                     if(r.getReports(results)) {
                         this->parent->getStorage()->addReport(results, m.getSender());
                     }
-                    Message res;
-                    res.setType(Message::Type::MRESPONSE);
-                    res.setCommand(Message::Command::SET);
-                    res.setArgument(Message::Argument::POSITIVE);
-
-                    sendMessage(fd, res);
                 }
             }
         }else if(m.getCommand() == Message::Command::MHELLO) {
@@ -261,6 +268,13 @@ void LeaderConnections::handler(int fd, Message &m) {
                 //the report should be only a part of it
                 Report r;
                 if(m.getData(r)) {
+                    Message res;
+                    res.setType(Message::Type::RESPONSE);
+                    res.setCommand(Message::Command::UPDATE);
+                    res.setArgument(Message::Argument::POSITIVE);
+                    
+                    sendMessage(fd, res);
+
                     Report::hardware_result hardware;
                     vector<Report::test_result> latency;
                     vector<Report::test_result> bandwidth;
@@ -277,10 +291,11 @@ void LeaderConnections::handler(int fd, Message &m) {
                     if(r.getIot(iot)) {
                         this->parent->getStorage()->addReportIot(m.getSender(), iot);
                     }
+                }else {
                     Message res;
                     res.setType(Message::Type::RESPONSE);
                     res.setCommand(Message::Command::UPDATE);
-                    res.setArgument(Message::Argument::POSITIVE);
+                    res.setArgument(Message::Argument::NEGATIVE);
                     
                     sendMessage(fd, res);
                 }
@@ -396,7 +411,6 @@ bool LeaderConnections::sendMReport(Message::node ip, vector<Report::report_resu
     if(Socket < 0) {
         return false;
     }
-
     fflush(stdout);
     char buffer[10];
 

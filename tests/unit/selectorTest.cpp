@@ -107,8 +107,8 @@ public:
     virtual std::string addNode(Message::node strIp, Report::hardware_result hardware, Message::node *monitored = NULL) {}
     virtual void addReport(Report::report_result result, Message::node *monitored = NULL) {}
     virtual void addReport(std::vector<Report::report_result> results, Message::node ip) {}
-    virtual void removeOldLNodes(int seconds) {}
-    virtual void removeOldNodes(int seconds) {}
+    virtual vector<Message::node> removeOldLNodes(int seconds) {}
+    virtual vector<Message::node> removeOldNodes(int seconds) {}
     virtual void removeChangeRole(std::vector<Message::node> leaders) {}
     virtual void complete() {}
 

@@ -154,6 +154,12 @@ void FollowerConnections::handler(int fd, Message &m) {
                     return;
                 //update the nodes
                 this->parent->getStorage()->updateNodes(ipsNew,ipsRem);
+            }else if(m.getArgument() == Message::Argument::REPORT) {
+                cout << "I'm not a leader anymore!?" << endl;
+                fflush(stdout);
+                shutdown(fd, SHUT_WR);
+                close(fd);
+                cout << "I'm not a leader anymore!? (closed)" << endl;
             }
         }
     }   
@@ -283,8 +289,9 @@ bool FollowerConnections::sendHello(Message::node ipS) {
 
 
 optional<pair<int64_t,Message::node>> FollowerConnections::sendUpdate(Message::node ipS, pair<int64_t,Message::node> update) {
+    cout << "sendUpdate0" << endl;
     int Socket = openConnection(ipS.ip, ipS.port);
-    
+    cout << "sendUpdate0.5" << endl;
     if(Socket < 0) {
         return nullopt;
     }
@@ -306,21 +313,22 @@ optional<pair<int64_t,Message::node>> FollowerConnections::sendUpdate(Message::n
     int64_t now = this->parent->getStorage()->getTime();
     int64_t time = update.first;
     if(ipS == update.second) {
-        r.setLatency(this->parent->getStorage()->getLatency(time));
-        r.setBandwidth(this->parent->getStorage()->getBandwidth(time));
+        r.setLatency(this->parent->getStorage()->getLatency(this->parent->node->sensitivity,time));
+        r.setBandwidth(this->parent->getStorage()->getBandwidth(this->parent->node->sensitivity,time));
         
     } else { //send all data
-        r.setLatency(this->parent->getStorage()->getLatency(this->parent->node->sensitivity));
-        r.setBandwidth(this->parent->getStorage()->getBandwidth(this->parent->node->sensitivity));
+        r.setLatency(this->parent->getStorage()->getLatency(0));
+        r.setBandwidth(this->parent->getStorage()->getBandwidth(0));
     }
     m.setData(r);
 
     
 
     std::optional<std::pair<int64_t,Message::node>> result = nullopt;
-
+    cout << "sendUpdate1" << endl;
     //send update message
     if(this->sendMessage(Socket, m)) {
+        cout << "sendUpdate2" << endl;
         Message res;
         if(this->getMessage(Socket, res)) {
             if( res.getType()==Message::Type::RESPONSE &&
@@ -332,6 +340,7 @@ optional<pair<int64_t,Message::node>> FollowerConnections::sendUpdate(Message::n
             }
         }
     }
+    cout << "sendUpdate3" << endl;
     close(Socket);
     return result;
 }

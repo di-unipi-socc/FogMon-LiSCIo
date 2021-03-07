@@ -20,6 +20,10 @@ def make_app():
 
     mongo.db.spec.create_index("session")
     mongo.db.footprint.create_index("session")
+    mongo.db.reports.create_index("datetime")
+    mongo.db.reports.create_index("session")
+    mongo.db.update.create_index("datetime")
+    mongo.db.reports.create_index("session")
 
     return app
 

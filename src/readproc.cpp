@@ -108,8 +108,8 @@ int ReadProc::waitproc() {
 int ReadProc::nowaitproc() {
     if (status == 0)
     {
-        int w;
-        if ((w = waitpid(pid, &status, WNOHANG)) < 0)
+        int w = waitpid(pid, &status, WNOHANG);
+        if (w < 0)
         {
             return 0;
         }
@@ -133,7 +133,7 @@ int ReadProc::nowaitproc() {
             return -1;
         }
     }
-    status =-1;
+    status = -1;
     return 0;
 }
 

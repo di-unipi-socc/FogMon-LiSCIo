@@ -1,3 +1,4 @@
+from .spec import get_associations
 from model import mongo
 from datetime import datetime
 from bson.son import SON
@@ -7,7 +8,7 @@ from model import clean_results, deaggregate
 import logging
 
 def get_sessions():
-    sessions1 = mongo.db.spec.find({})
+    sessions1 = mongo.db.spec.find({}, projection={'_id': False})
     sessions2 = mongo.db.reports.aggregate([
         {"$sort": SON([("datetime", -1)])},
         {"$group": {
@@ -32,10 +33,43 @@ def get_sessions():
     logging.info(str(sessions))
     return sessions
 
-def get_session(id):
-    updates = mongo.db.update.find({"session":id}).sort([("datetime", -1)])
-    reports = mongo.db.reports.find({"session":id}).sort([("datetime", -1)])
+def get_session(session):
+    logging.info("start")
+    updates = mongo.db.update.find({"session":session}, projection={'_id': False}).sort([("datetime", -1)])
+    reports = mongo.db.reports.find({"session":session}, projection={'_id': False}).sort([("datetime", -1)]).limit(10)
+    logging.info("query")
     data = unify_reports(reports,updates)
+    logging.info("unify")
+    import networkx as nx
+    import json
+
+    G = nx.DiGraph()
+    leaders = {}
+    nodes = {}
+    id = 0
+    Nodes,Ids =get_associations(session)
+    logging.info("associations")
+    ids = {}
+    reports = mongo.db.reports.find({"session":session}, projection={'_id': False}).sort([("datetime", -1)]).limit(1)
+    reports = list(reports)
+    for report in reports[0]["report"]["reports"]:
+        nodes[Ids[report["source"]["id"]]] = id
+        ids[id] = Ids[report["source"]["id"]]
+        leaders[id] = Ids[report["leader"]]
+        G.add_node(id)
+        id+=1
+    logging.info("reports")
+    # this d3 example uses the name attribute for the mouse-hover value,
+    # so add a name to each node
+    for n in G:
+        G.nodes[n]["name"] = ids[n]
+        G.add_edge(n, nodes[leaders[n]],l=0)
+    # write json formatted data
+    d = nx.json_graph.node_link_data(G)  # node-link format to serialize
+    # write json
+    logging.info(d)
+    data["d3"] = d
+
     return data
 
 def add_testbed(data):
@@ -48,15 +82,15 @@ def add_testbed(data):
             els = mongo.db.spec.find({})
             found = False
             for el in els:
-                el["_id"] = str(el["_id"])
-                stri = json.dumps(el)
                 if data == el["specs"][0]:
-                    logging.info("Equal: "+stri[:100])
                     found = True
                     break
             if found:
                 logging.info("Old session")
                 session = el["session"]
+                el["change_dates"] = []
+                el["specs"] = el["specs"][:1]
+                mongo.db.spec.replace_one({"session": session}, el, upsert=True)
             else:
                 logging.info("New session")
                 sessions = get_sessions()
@@ -80,7 +114,9 @@ def change_testbed(session, data):
             spec = mongo.db.spec.find_one({"session": session})
             spec["change_dates"].append(datetime.utcnow())
             spec["specs"].append(data)
+            moment = len(spec["change_dates"])
             mongo.db.spec.replace_one({"session": session}, spec, upsert=True)
+    return moment
 
 def remove(session):
     with mongo.cx.start_session() as mongo_session:
@@ -103,10 +139,15 @@ def search_lasts(reports, update):
 
 
 def unify_reports(reports,updates):
-    reports = clean_results(reports)
     updates = clean_results(updates)
-
-    reports = search_lasts(reports, updates[0])
+    logging.info("clean")
+    try:
+        reports = search_lasts(reports, updates[0])
+        logging.info("search_lasts")
+        reports = clean_results(reports)
+        logging.info("clean2")
+    except:
+        return {"Reports":[reports[0]["report"]],"Leaders":None}
     return {"Reports":reports,"Leaders":updates[0]}
 
 def save_report(report):

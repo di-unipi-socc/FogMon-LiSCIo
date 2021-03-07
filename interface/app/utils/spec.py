@@ -1,13 +1,18 @@
 from model import mongo, get_leaders, get_lastreports, get_updates, get_spec, get_reports
 import logging
 
-def get_associations(session):
+def get_associations(session, reports=None):
     spec = get_spec(session)
-    reports = get_reports(session)
-    
     Nodes = [k for k,v in spec["specs"][0]["nodes"].items()]
-    Nodes = {i:{} for i in Nodes}
-    for report in reports[::-1]:
+    Nodes = {i:"None" for i in Nodes}
+
+    if reports is None:
+        reports = get_reports(session,limit=len(Nodes)*3)
+    elif type(reports) == dict:
+        reports = [v for k,v in reports.items()]
+    
+    
+    for report in reports:
         for node in report["report"]["reports"]:
             for test in node["latency"]:
                 ip = test["target"]["ip"]
@@ -21,11 +26,11 @@ def get_associations(session):
     Ids = {}
     for k,v in Nodes.items():
         Ids[v] = k
-        logging.info("node: "+str(k)+" "+str(v))
+        #logging.info("node: "+str(k)+" "+str(v))
     return Nodes,Ids
 
 def associate_spec(reports, spec, session):
-    Nodes,Ids = get_associations(session)
+    Nodes,Ids = get_associations(session, reports)
     Links = {"L":{},"B":{}}
     for i in Nodes:
         Links["L"][i] = {}
@@ -45,4 +50,4 @@ def associate_spec(reports, spec, session):
         except:
             raise Exception("Some links are missing")
 
-    return {"nodes": Nodes,"ids": Ids, "links": Links, "spec": spec}
+    return {"nodes": Nodes,"ids": Ids, "links": Links, "spec": spec, "session": session}

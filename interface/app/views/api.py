@@ -33,12 +33,20 @@ def post_testbed():
 
 @api.route('/testbed/<int:session>', methods=['POST'])
 def put_testbed(session):
-    data = request.get_json(force=True)
-    change_testbed(session, data)
-
+    print("ciao",flush=True)
+    try:
+        data = request.get_json(force=True)
+    except:
+        import traceback
+        print(traceback.format_exc(), flush=True)
+        raise
+    print("ciao2",flush=True)
+    moment = change_testbed(session, data)
+    print("ciao3",flush=True)
     return jsonify(
         status=True,
         message='Saved successfully!',
+        moment=moment
     ), 201
 
 @api.route('/testbed/<int:session>')
@@ -47,6 +55,7 @@ def get_testbed(session):
         data = get_session(session)
     except:
         data = None
+        raise
 
     return jsonify(
         status=True,

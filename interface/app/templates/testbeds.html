@@ -3,6 +3,8 @@
 {% block head %}
   {{ super() }}
   <script src="/static/testbeds.js"></script>
+  <script type="text/javascript" src="https://d3js.org/d3.v4.min.js"></script>
+  <link type="text/css" rel="stylesheet" href="static/force.css"/>
 {% endblock %}
 {% set active_page = "testbeds" %}
 {% block content %}
@@ -32,5 +34,7 @@
     </table>
     <h2> Selected session:</h2> <br>
     <div id="session"></div>
+
+    <svg width="960" height="600"></svg>
 </div>
 {% endblock %}

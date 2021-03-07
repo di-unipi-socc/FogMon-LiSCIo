@@ -110,6 +110,14 @@ void signalHandler( int signum ) {
 
 void Follower::stop() {
     IAgent::stop();
+    if(this->timerThread.joinable())
+    {
+        this->timerThread.join();
+    }
+    if(this->timerTestThread.joinable())
+    {
+        this->timerTestThread.join();
+    }
     if(this->pIperf)
         delete this->pIperf;
     if(this->pAssoloRcv)
@@ -125,14 +133,7 @@ void Follower::stop() {
     this->pIperf = NULL;
     this->pAssoloRcv = NULL;
     this->pAssoloSnd = NULL;
-    if(this->timerThread.joinable())
-    {
-        this->timerThread.join();
-    }
-    if(this->timerTestThread.joinable())
-    {
-        this->timerTestThread.join();
-    }
+    
     if(this->server)
         this->server->stop();
     if(this->connections)
@@ -254,7 +255,7 @@ int Follower::startIperf() {
 
     char *args[] = {(char*)"/bin/iperf3", (char*)"-s",(char*)"-p",command, NULL };
     ReadProc *proc = new ReadProc(args);
-    sleeper.sleepFor(chrono::milliseconds(50));
+    sleeper.sleepFor(chrono::milliseconds(100));
     int res = proc->nowaitproc();
 
     if(res != 0) {
@@ -332,7 +333,7 @@ float Follower::testBandwidthIperf(string ip, int port) {
     if(exit_code == 0) {
         Document doc;
         ParseResult ok = doc.Parse((const char*)output.c_str());
-        if(!ok)
+        if( !ok )
             return -1;
         
         if( !doc.HasMember("end") && !doc["end"].IsObject() &&
@@ -543,12 +544,14 @@ void Follower::getHardware() {
 void Follower::timer() {
     int iter=0;
     while(this->running) {
+        auto t_start = std::chrono::high_resolution_clock::now();
         //generate hardware report and send it
         this->getHardware();
-
+        cout << "update1" << endl;
         std::optional<std::pair<int64_t,Message::node>> ris = this->connections->sendUpdate(this->nodeS, this->update);
-
+        cout << "update2" << endl;
         if(ris == nullopt) {
+            cout << "update retry..." << endl;
             ris = this->connections->sendUpdate(this->nodeS,this->update);
             if(ris == nullopt) {
                 //change server
@@ -609,7 +612,29 @@ void Follower::timer() {
             }
         }
 
-        sleeper.sleepFor(chrono::seconds(this->node->timeReport));
+        // check iperf still running
+        // int res = this->pIperf->nowaitproc();
+        // if(res!=-1) {
+        //     string out = this->pIperf->readoutput();
+        //     cout << "Iperf crashed!!!!!!!! "<< res << " " << out << endl;
+        //     delete this->pIperf;
+        //     this->pIperf = NULL;
+        //     this->startIperf();
+        // }
+
+        if(iter % 5 == 0) {
+            string out = this->pIperf->readoutput();
+            cout << "Iperf restart" << endl;
+            delete this->pIperf;
+            this->pIperf = NULL;
+            this->startIperf();
+        }
+
+        auto t_end = std::chrono::high_resolution_clock::now();
+        auto elapsed_time = std::chrono::duration_cast<std::chrono::duration<float>>(t_end-t_start).count();
+        int sleeptime = this->node->timeReport-elapsed_time;
+        if (sleeptime > 0)
+            sleeper.sleepFor(chrono::seconds(sleeptime));
         iter++;
     }
 }
@@ -649,9 +674,14 @@ void Follower::TestTimer() {
         //test bandwidth
         //get 10 nodes tested more than 300 seconds in the past
         ips = this->storage->getLRBandwidth(this->node->maxPerBandwidth + 5, this->node->timeBandwidth);
+        cout << "List B: ";
+        for(auto node : ips) {
+            cout << node.ip << " ";
+        }
+        cout << endl;
         int i=0;
         int tested=0;
-        while(i < ips.size() && tested < 1) {
+        while(i < ips.size() && tested < this->node->maxPerBandwidth) {
             if(this->myNode.id == ips[i].id) {
                 i++;
                 continue;
@@ -723,6 +753,10 @@ float Follower::testBandwidth(Message::node ip, float old, int &state) {
                     state = 0;
             }
     }
+    if(port == -1 || result <0) {
+        cout << "Test ["<< ip.ip <<"]: " << port << " " << result << endl;
+    }
+
     return result;
 }
 
