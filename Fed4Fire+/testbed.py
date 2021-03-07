@@ -83,6 +83,21 @@ class Testbed:
         for thread in threads:
             thread.join()
 
+    def get_file(self, node, src_name, dst_name):
+        conn = Connection(node,
+            config = self.config)
+        conn.get(src_name, dst_name)
+
+    def get_files(self, nodes: list, src_name: str, dst_name: str):
+        threads = []
+        for node in nodes:
+            x = threading.Thread(target=self.get_file, args=(node,src_name, f"{node}-{dst_name}"))
+            threads.append(x)
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join()
+
     def wait_script(self, name, nodes, retry = 0, timeout = 1):
         conns = ThreadingGroup(*nodes,
             config = self.config)
@@ -252,3 +267,25 @@ class Testbed:
         scripts = self.generate_network_scripts(spec)
         self.exec_scripts("network",scripts)
         self.wait_script("network", nodes)
+
+    def start_monitor(self, nodes):
+        scripts = {node:monitor_script for node in nodes}
+        self.exec_scripts("monitor",scripts)
+    
+    def collect_monitor(self, nodes):
+        self.get_files(nodes, "test.log", "cpu.txt")
+        self.get_files(nodes, "bmon.log", "bmon.txt")
+
+    def stop_monitor(self, nodes):
+        conns = ThreadingGroup(*nodes,
+            config = self.config)
+        conns.run("screen -S monitor -X stuff '0'`echo -ne $'\cc'` | screen -list | ps ax | grep 'bmon'")
+        for i in range(30):
+            results = conns.run("screen -S monitor -Q select . > /dev/null 2>&1 ; echo $?", hide=True)
+            if len([r for r in results if int(results[r].stdout) != 1]) == 0:
+                return True
+            print("Retry...",end=" ",flush=True)
+            sleep(1)
+        print("Not terminated")
+        return False
+        

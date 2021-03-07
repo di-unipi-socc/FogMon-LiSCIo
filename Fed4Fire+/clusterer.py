@@ -27,7 +27,7 @@ def quality(matrix,clusters,medoids):
     return v/len(medoids)
 
 class Clusterer:
-    def __init__(self, Ls,Ns, Links):
+    def __init__(self, Ls,Ns, Links, formula=0):
         self.Nodes = Ns
         self.Leaders = Ls
 
@@ -38,9 +38,19 @@ class Clusterer:
         for i in range(self.N):
             self.D[self.Nodes[i]]=i
 
+        print(Links)
+        print(self.Nodes)
+
         self.A = [[Links[i][j] for j in self.Nodes] for i in self.Nodes]
 
-        k = int(math.sqrt(self.N))
+        if formula == -1:
+            k = int(math.sqrt(self.N)/1.55)
+        elif formula == -2:
+            k = int(math.sqrt(self.N)*2)
+        elif formula > 0:
+            k = formula
+        else:
+            k = int(math.sqrt(self.N))
         # Set random initial medoids. considering the already selected leaders
         if self.L<k:
             sample = []

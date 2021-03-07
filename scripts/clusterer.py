@@ -38,6 +38,9 @@ class Clusterer:
         for i in range(self.N):
             self.D[self.Nodes[i]]=i
 
+        print(Links)
+        print(self.Nodes)
+
         self.A = [[Links[i][j] for j in self.Nodes] for i in self.Nodes]
 
         if formula == -1:
@@ -80,7 +83,7 @@ class Clusterer:
 
                 for i in self.D:
                     if self.D[i] in medoids:
-                        new_leaders.append(str(i))
+                        new_leaders.append(i)
                 
                 changes = 0
 

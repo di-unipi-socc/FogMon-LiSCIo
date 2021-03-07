@@ -56,15 +56,15 @@ class Experimenter:
         self.num = len(self.base_topology.selected)
         self.testbed = Testbed("build")
 
-    def connect(self, method, url, expected_status, json=None, tries=30, time=3):
+    def connect(self, method, url, expected_status, tries=30, time=3, **params):
         for i in range(tries):
             try:
                 if method == "GET":
-                    r = requests.get(url)
+                    r = requests.get(url, **params)
                     if r.status_code != expected_status:
                         raise Exception("connection error")
                 elif method == "POST":
-                    r = requests.post(url, json=json)
+                    r = requests.post(url, **params)
                     if r.status_code != expected_status:
                         raise Exception("connection error")
                 return r
@@ -109,13 +109,34 @@ class Experimenter:
             json.dump(self.sessions, wr)
 
     def start_moment(self, name):
+        self.stop_monitor()
         spec = self.spec.spec
         r = self.connect("POST",f"http://131.114.72.76:8248/testbed/{self.sessions[-1]['session']}",201, json=spec)
         self.sessions[-1]["moments"]
         import json
         with open("sessions.json","w") as wr:
             json.dump(self.sessions, wr)
-        
+        self.start_monitor()
+    
+    def start_monitor(self):
+        spec = self.spec.spec
+        nodes = [k for k in spec["nodes"]]
+        self.testbed_try(self.testbed.start_monitor,nodes=nodes)
+
+    def stop_monitor(self):
+        spec = self.spec.spec
+        nodes = [k for k in spec["nodes"]]
+        self.testbed_try(self.testbed.stop_monitor,nodes=nodes)
+        self.testbed_try(self.testbed.collect_monitor,nodes=nodes)
+        files = {}
+        for node in nodes:
+            bmon = node+"-bmon.txt"
+            psrecord = node+"-cpu.txt"
+            files[bmon] = open(bmon,'rb')
+            files[psrecord] = open(psrecord,'rb')
+        print("sending monitored data")
+        r = self.connect("POST",f"http://131.114.72.76:8248/testbed/{self.sessions[-1]['session']}/footprint",201, json=spec,files=files)
+
     def build_params(self, conf):
         conf["-s"] = self.sessions[-1]["session"]
         conf["-i"] = "131.114.72.76:8248"
@@ -137,8 +158,10 @@ class Experimenter:
         followers = [k for k in spec["nodes"]]
         params = self.build_params(conf)
         self.testbed_try(self.testbed.start,followers=followers[1:],leader=followers[0],params=params)
+        self.start_monitor()
 
     def stop_fogmon(self):
+        self.stop_monitor()
         spec = self.spec.spec
         nodes = [k for k in spec["nodes"]]
         self.testbed_try(self.testbed.stop,nodes=nodes)

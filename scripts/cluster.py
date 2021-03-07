@@ -25,7 +25,7 @@ c = conn.cursor()
 
 Nodes = c.execute('SELECT * FROM MNodes').fetchall()
 Leaders = c.execute('SELECT * FROM MMNodes').fetchall()
-
+Nodes = [str(i[0]) for i in Nodes]
 L = len(Leaders)
 LeadersIds = []
 for i in Leaders:
@@ -33,35 +33,32 @@ for i in Leaders:
 
 N = len(Nodes)
 
-D = {}
-for i in range(N):
-    D[str(Nodes[i][0])]=i
-
-A = [[None for _ in range(N)] for _ in range(N)]
+A = {node:{node:None for node in Nodes} for node in Nodes}
 
 avg = 0
 n = 0
 for a in c.execute('SELECT * FROM MLinks'):
     try:
-        A[D[str(a[0])]][D[str(a[1])]] = a[2]
+        A[str(a[0])][str(a[1])] = a[2]
         if a[2] != None:
             avg += a[2]
             n+=1
     except:
+        raise
         pass
 
 c.close()
 
 avg /= n
-for i in range(len(A)):
-    for j in range(len(A[i])):
+for i in Nodes:
+    for j in Nodes:
         if A[i][j]==None:
             A[i][j] = avg
         if A[i][j]==0:
             A[i][j] = 0.5
 
 from clusterer import Clusterer
-clusterer = Clusterer([D[i] for i in LeadersIds],[D[str(i[0])] for i in Nodes],A, formula)
+clusterer = Clusterer(LeadersIds,Nodes,A, formula)
 
 data = clusterer.cluster(2)
 import json
