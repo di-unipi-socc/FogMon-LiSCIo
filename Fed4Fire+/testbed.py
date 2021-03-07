@@ -31,7 +31,7 @@ docker_script = [
     "sudo apt-get -y update",
     "sudo DEBIAN_FRONTEND=noninteractive apt-get -y install apt-transport-https ca-certificates curl gnupg-agent software-properties-common",
     "sudo apt-get remove docker docker-engine docker.io containerd runc",
-    "curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add -",
+    "sudo curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add -",
     'sudo add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable"',
     "sudo apt-get update",
     "sudo apt-get install -y docker-ce docker-ce-cli containerd.io",
@@ -40,11 +40,11 @@ docker_script = [
 ]
 
 monitor_script = [
-    "bmon -r 1 -o format:fmt='\\$(element:name) \\$(attr:rxrate:bytes) \\$(attr:txrate:bytes)\\n' -p \\$(ip route | grep default | sed -e 's/^.*dev.//' -e 's/.proto.*//') > bmon.log &",
-    "P1=\\$!",
+    "bmon -r 1 -o format:fmt='$(element:name) $(attr:rxrate:bytes) $(attr:txrate:bytes)\\n' -p $(ip route | grep default | sed -e 's/^.*dev.//' -e 's/.proto.*//') > bmon.log &",
+    "P1=$!",
     "sudo docker stats --format '{{.Container}}\\t{{.CPUPerc}}\\t{{.MemUsage}}' > test.log &",
-    "P2=\\$!",
-    "wait \\$P1 \\$P2",
+    "P2=$!",
+    "wait $P1 $P2",
     "echo 'Done'"
 ]
 
@@ -67,13 +67,16 @@ class Testbed:
         conns.run(f"chmod +x {file}", hide=True)
         script = ""
         for line in lines:
-            script += f"sudo {line}\n"
-        
+            script += f"{line}\n"
+
+        script = script.replace("\\","\\\\")
         script = script.replace("'","\\'")
+        
         conns.run(f'echo $\'{script}\' > {file}', hide=True)
         conns.run(f"screen -d -m -S {name} bash -c '{file}'", hide=True)
 
     def exec_scripts(self, name, scripts: dict):
+        print(name)
         threads = []
         for node in scripts:
             x = threading.Thread(target=self.exec_script, args=(name,scripts[node], [node]))
@@ -86,6 +89,7 @@ class Testbed:
     def get_file(self, node, src_name, dst_name):
         conn = Connection(node,
             config = self.config)
+        print(src_name)
         conn.get(src_name, dst_name)
 
     def get_files(self, nodes: list, src_name: str, dst_name: str):
@@ -131,9 +135,9 @@ class Testbed:
         scripts = {}
         for node in spec["nodes"]:
             comms = []
-            comms.append(f"sed -i -E 's/([a-z0-9-]+) ([a-zA-Z0-9-]+) ([a-zA-Z0-9-]+)$/\\3 \\1 \\2/' /etc/hosts")
-            comms.append(f"sed -i '/127.0.0.1\t{node}/d' /etc/hosts")
-            comms.append(f'bash -c \'echo "127.0.0.1\t{node}" >> /etc/hosts\'')
+            comms.append(f"sudo sed -i -E 's/([a-z0-9-]+) ([a-zA-Z0-9-]+) ([a-zA-Z0-9-]+)$/\\3 \\1 \\2/' /etc/hosts")
+            comms.append(f"sudo sed -i '/127.0.0.1\t{node}/d' /etc/hosts")
+            comms.append(f'sudo bash -c \'echo "127.0.0.1\t{node}" >> /etc/hosts\'')
             if spec["nodes"][node]["testbed"] != TestBeds.CITY.value:
                 for comm in enable_nat:
                     comms.append(comm)
@@ -150,8 +154,8 @@ class Testbed:
                     otherip = v["ips"][1]
                     found = True
                 if found:
-                    comms.append(f"sed -i '/{otherip}/d' /etc/hosts")
-                    comms.append(f'bash -c \'echo "{otherip}\t{othername}" >> /etc/hosts\'')
+                    comms.append(f"sudo sed -i '/{otherip}/d' /etc/hosts")
+                    comms.append(f'sudo bash -c \'echo "{otherip}\t{othername}" >> /etc/hosts\'')
             scripts[node] = comms
         return scripts
     
@@ -178,13 +182,13 @@ class Testbed:
                 myipv6 = spec["nodes"][node]["ipv6"]
                 otheripv6 = spec["nodes"][othername]["ipv6"]
                 if found:
-                    comms.append(f"ip -6 link del dev {grename} ; echo $?")
-                    comms.append(f"ip -6 link add name {grename} type ip6gre local {myipv6} remote {otheripv6} ttl 64")
-                    comms.append(f"ip link set up dev {grename}")
-                    comms.append(f"ip addr add {myip} peer {otherip} dev {grename}")
-                    comms.append(f"ip link set dev {grename} mtu 1400")
+                    comms.append(f"sudo ip -6 link del dev {grename} ; echo $?")
+                    comms.append(f"sudo ip -6 link add name {grename} type ip6gre local {myipv6} remote {otheripv6} ttl 64")
+                    comms.append(f"sudo ip link set up dev {grename}")
+                    comms.append(f"sudo ip addr add {myip} peer {otherip} dev {grename}")
+                    comms.append(f"sudo ip link set dev {grename} mtu 1400")
                     if "capacity" in v or "latency" in v or "packet_loss" in v:
-                        command = f"tc qdisc add dev {grename} root netem "
+                        command = f"sudo tc qdisc add dev {grename} root netem "
                         if "latency" in v:
                             latency = v["latency"]
                             if not v["same_testbed"]:

@@ -8,9 +8,8 @@ from time import sleep
 from datetime import datetime
 from zipfile import ZipFile
 import random
+import json
 
-# TODO: retry all connections error exceptions
-# TODO: retry all ssh connections
 
 configs = {
     "default": {   
@@ -104,7 +103,6 @@ class Experimenter:
         self.sessions.append({"num": num, "name": name, "session": session, "moments": [],"version": 1})
         self.clear_session(session)
         print("session",self.sessions[-1])
-        import json
         with open("sessions.json","w") as wr:
             json.dump(self.sessions, wr)
 
@@ -112,8 +110,9 @@ class Experimenter:
         self.stop_monitor()
         spec = self.spec.spec
         r = self.connect("POST",f"http://131.114.72.76:8248/testbed/{self.sessions[-1]['session']}",201, json=spec)
-        self.sessions[-1]["moments"]
-        import json
+        moment = r.json()["moment"]
+        self.sessions[-1]["moments"].append({"moment": moment, "name": name})
+        print("session",self.sessions[-1]["moments"][-1])
         with open("sessions.json","w") as wr:
             json.dump(self.sessions, wr)
         self.start_monitor()
@@ -161,11 +160,13 @@ class Experimenter:
         self.start_monitor()
 
     def stop_fogmon(self):
-        self.stop_monitor()
+        try:
+            self.stop_monitor()
+        except:
+            pass
         spec = self.spec.spec
         nodes = [k for k in spec["nodes"]]
         self.testbed_try(self.testbed.stop,nodes=nodes)
-        import json
         with open("sessions.json","w") as wr:
             json.dump(self.sessions, wr)
 
@@ -183,7 +184,7 @@ class Experimenter:
         while not stable:
             sleep(60)
             try:
-                r = self.connect("GET",f"http://131.114.72.76:8248/testbed/{self.sessions[-1]['session']}/accuracy",200)
+                r = self.connect("GET",f"http://131.114.72.76:8248/testbed/{self.sessions[-1]['session']}/accuracy",200,time=60)
                 moments = r.json()["data"]
                 moment = moments[-1]
                 if "True" in moment["stable"]:# or "False (3)" in moment["stable"]:
@@ -316,22 +317,26 @@ if __name__ == "__main__":
             # Extract all the contents of zip file in build directory
             zipObj.extractall("build")
         os.system("chmod 600 build/id_rsa")
-    elif sys.argv[2] in  ["setup", "pull", "start", "stop", "test"]:
+    elif sys.argv[2] in  ["setup", "network","pull", "start", "stop", "test"]:
         #path = input("insert topology file path [e.g. ./topology]\nAlso make sure that topology file is the same used to generate the spec.xml for the build path loaded: ")
         topology = Topology.load(sys.argv[1])
         exp = Experimenter(topology)
         if sys.argv[2] == "setup":
             exp.setup()
+        elif sys.argv[2] == "network":
+            exp.restore_links(moment=False)
         elif sys.argv[2] == "pull":
             exp.pull()
         elif sys.argv[2] == "start":
             exp.start_experiment(configs["default"])
         elif sys.argv[2] == "stop":
-            spec = Spec(topology=exp.base_topology).spec
-            nodes = [node for node in spec["nodes"]]
-            exp.testbed.stop(nodes)
+            with open("sessions.json","r") as rd:
+                exp.sessions = json.load(rd)
+            exp.spec = Spec(topology=exp.base_topology)
+            exp.stop_fogmon()
         elif sys.argv[2] == "test":
-            exp.sessions.append({"num": 20, "name": "base and", "session": 21, "moments": [],"version": 1})
-            exp.get_roles()
-            exp.start_experiment(configs["default"])
+            with open("sessions.json","r") as rd:
+                exp.sessions = json.load(rd)
+            exp.spec = Spec(topology=exp.base_topology)
+            exp.stop_monitor()
 
