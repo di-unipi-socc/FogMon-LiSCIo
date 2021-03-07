@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 from topology import Topology,Node
-from clusterer import Clusterer
+from ..scripts.clusterer import Clusterer
 
 topology = Topology.load("topology-20-226")
 selected = topology.selected

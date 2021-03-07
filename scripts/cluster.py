@@ -16,30 +16,6 @@ try:
 except:
     exit()
 
-def avg_dist(matrix,cluster,medoid):
-    m = 0
-    for i in cluster:
-        if i==medoid:
-            continue
-        m+= matrix[i][medoid]
-    if len(cluster)==1:
-        return 0
-    return m/(len(cluster)-1)
-
-def quality(matrix,clusters,medoids):
-    v = 0
-    avgs = [avg_dist(matrix,clusters[i],medoids[i]) for i in range(len(medoids))]
-    for i in range(len(medoids)):
-        m = 0
-        for j in range(len(medoids)):
-            if i==j:
-                continue
-            m2 = (avgs[i]+avgs[j])/matrix[medoids[i]][medoids[j]]
-            if m < m2:
-                m = m2
-        v += m
-    return v/len(medoids)
-
 from shutil import copyfile
 
 copyfile("leader_node.db", "leader_node_copy.db")
@@ -66,10 +42,13 @@ A = [[None for _ in range(N)] for _ in range(N)]
 avg = 0
 n = 0
 for a in c.execute('SELECT * FROM MLinks'):
-    A[D[str(a[0])]][D[str(a[1])]] = a[2]
-    if a[2] != None:
-        avg += a[2]
-        n+=1
+    try:
+        A[D[str(a[0])]][D[str(a[1])]] = a[2]
+        if a[2] != None:
+            avg += a[2]
+            n+=1
+    except:
+        pass
 
 c.close()
 
@@ -81,59 +60,10 @@ for i in range(len(A)):
         if A[i][j]==0:
             A[i][j] = 0.5
 
-c.close()
+from clusterer import Clusterer
+clusterer = Clusterer([D[i] for i in LeadersIds],[D[str(i[0])] for i in Nodes],A, formula)
 
-if formula == -1:
-    k = int(math.sqrt(N)/1.55)
-elif formula == -2:
-    k = int(math.sqrt(N)*2)
-elif formula > 0:
-    k = formula
-else:
-    k = int(math.sqrt(N))
-
-# Set random initial medoids. considering the already selected leaders
-if L<k:
-    sample = []
-    for i in range(len(A)):
-        if i not in [D[i] for i in LeadersIds]:
-            sample.append(i)
-    initial_medoids = [D[i] for i in LeadersIds] + random.sample(sample,k=k-L)
-
-elif L==k:
-    initial_medoids = [D[i] for i in LeadersIds]
-
-else:
-    initial_medoids = random.sample([D[i] for i in LeadersIds],k=k)
-
-# create K-Medoids algorithm for processing distance matrix instead of points
-kmedoids_instance = kmedoids(A, initial_medoids, data_type='distance_matrix')
-# run cluster analysis and obtain results
-kmedoids_instance.process()
-medoids = kmedoids_instance.get_medoids()
-clusters = kmedoids_instance.get_clusters()
-q = quality(A,clusters,medoids)
-
-
-
-new_leaders = []
-
-for i in D:
-    if D[i] in medoids:
-        new_leaders.append(str(i))
-
-changes = 0
-
-for i in new_leaders:
-    if i not in LeadersIds:
-        changes+=1
-
-data = {
-    "quality": q,
-    "new_leaders": new_leaders,
-    "changes": changes
-    }
-
+data = clusterer.cluster(2)
 import json
 
 print(json.dumps(data))

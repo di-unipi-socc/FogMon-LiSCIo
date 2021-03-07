@@ -6,30 +6,7 @@ from pyclustering.samples.definitions import FCPS_SAMPLES
 import random
 import math
 import sqlite3
-
-def avg_dist(matrix,cluster,medoid):
-    m = 0
-    for i in cluster:
-        if i==medoid:
-            continue
-        m+= matrix[i][medoid]
-    if len(cluster)==1:
-        return 0
-    return m/(len(cluster)-1)
-
-def quality(matrix,clusters,medoids):
-    v = 0
-    avgs = [avg_dist(matrix,clusters[i],medoids[i]) for i in range(len(medoids))]
-    for i in range(len(medoids)):
-        m = 0
-        for j in range(len(medoids)):
-            if i==j:
-                continue
-            m2 = (avgs[i]+avgs[j])/matrix[medoids[i]][medoids[j]]
-            if m < m2:
-                m = m2
-        v += m
-    return v/len(medoids)
+from clusterer import quality
 
 from shutil import copyfile
 
@@ -70,10 +47,13 @@ A = [[None for _ in range(N)] for _ in range(N)]
 avg = 0
 n = 0
 for a in c.execute('SELECT * FROM MLinks'):
-    A[D[a[0]]][D[a[1]]] = a[2]
-    if a[2] != None:
-        avg += a[2]
-        n+=1
+    try:
+        A[D[a[0]]][D[a[1]]] = a[2]
+        if a[2] != None:
+            avg += a[2]
+            n+=1
+    except:
+        pass
 
 c.close()
 
