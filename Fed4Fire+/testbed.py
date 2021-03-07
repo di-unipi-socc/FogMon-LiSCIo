@@ -191,22 +191,26 @@ class Testbed:
     def setup(self, spec):
         nodes = [node for node in spec["nodes"]]
         # setup network
-        # scripts = self.generate_init_network_scripts(spec)
-        # self.exec_scripts("network-init",scripts)
-        # self.wait_script("network-init", nodes)
+        scripts = self.generate_init_network_scripts(spec)
+        self.exec_scripts("network-init",scripts)
+        self.wait_script("network-init", nodes)
 
-        # scripts = self.generate_network_scripts(spec)
-        # self.exec_scripts("network",scripts)
-        # self.wait_script("network", nodes)
+        scripts = self.generate_network_scripts(spec)
+        self.exec_scripts("network",scripts)
+        self.wait_script("network", nodes)
 
-        # # setup docker
-        # self.exec_script("docker", docker_script, nodes)
-        # self.wait_script("docker", nodes,timeout=20)
+        # setup docker
+        self.exec_script("docker", docker_script, nodes)
+        self.wait_script("docker", nodes,timeout=20)
 
         # pull fogmon
         self.exec_script("pull", [f"sudo docker pull {fogmon_images[0]}"], nodes)
         self.wait_script("pull", nodes)
 
+    def pull(self, spec):
+        nodes = [node for node in spec["nodes"]]
+        self.exec_script("pull", [f"sudo docker pull {fogmon_images[0]}"], nodes)
+        self.wait_script("pull", nodes)
 
     def start(self, followers, leader, params, image=fogmon_images[0], only_followers = False):
         conn = Connection(leader, config=self.config)
@@ -233,7 +237,7 @@ class Testbed:
     def kill(self, nodes):
         conns = ThreadingGroup(*nodes,
             config = self.config)
-        conns.run("sudo docker kill $(docker ps -q)")
+        conns.run("sudo docker kill $(docker ps -q) | sudo docker ps")
         for i in range(30):
             results = conns.run("screen -S fogmon -Q select . > /dev/null 2>&1 ; echo $?", hide=True)
             if len([r for r in results if int(results[r].stdout) != 1]) == 0:

@@ -7,6 +7,7 @@ fixes:
     added valgrind version for debug of crashes.
     fixed sensibility problems resulting in not sending any update on Bandwidth and Latency
     fixed slow test in bandwidth: there was a problem in the order in least recently measured bandwidth in follower
+    fixed close sockets in queue when switching from leader to follower (causing other follower to be hanging)
 
 New:
     Added interface service
@@ -31,5 +32,6 @@ Necessary improvments:
     multithread of tests
     slow in becoming leader from follower (beacuse tests take too much time (bandwidht mainly))
     add queue for single processing of storage data (too slow, and shouldnt occupy the connection threads)
+    update scripts with new clustering class, and make more tries for node (maybe 2-3)
 
 
