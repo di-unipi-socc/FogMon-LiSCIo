@@ -74,7 +74,10 @@ void Connections::stop() {
             this->workers[i].join();
         }
     }
-
+    int fd;
+    while(this->queue.pop(&fd)) {
+        close(fd);
+    }
 }
 
 void Connections::request(int fd) {
@@ -89,9 +92,14 @@ void Connections::worker() {
 
         int error;
         Message m;
-        if(this->getMessage(fd, m)) {
-            this->handler(fd, m);    
+        try {
+            if(this->getMessage(fd, m)) {
+                this->handler(fd, m);    
+            }
+        }catch(...) {
+            
         }
+        shutdown(fd, SHUT_RDWR);
         close(fd);    
     }
     this->running = false;
@@ -156,9 +164,13 @@ bool Connections::getMessage(int fd, Message &m) {
     int error;
     int32_t len=0;
     bool ret = false;
+    auto t_start = std::chrono::high_resolution_clock::now();
     error = readS(fd, &len, sizeof(len));
     if (error < 0)
     {
+        auto t_end = std::chrono::high_resolution_clock::now();
+        auto elapsed_time = std::chrono::duration_cast<std::chrono::duration<float>>(t_end-t_start).count();
+        std::cout << "recv() elapsed time: "<< elapsed_time << " s"<< endl;
         perror("   recv() failed at len");
         cout << "len: "<<len << endl << " error: "<< error <<endl;
         //stacktrace();

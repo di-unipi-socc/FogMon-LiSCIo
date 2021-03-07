@@ -4,6 +4,8 @@
 #include <sstream>
 #include <inttypes.h>
 #include "storage.hpp"
+#include <chrono>
+#include <iostream>
 
 using namespace std;
 
@@ -36,6 +38,9 @@ Message::node LeaderStorage::getNode() {
 }
 
 std::string LeaderStorage::addNode(Message::node node, Report::hardware_result hardware, Message::node *monitored) {
+    if(hardware.lasttime == 0) { //these are directly measured
+        return "";
+    }
     char *zErrMsg = 0;
     char buf[1024];
     vector<long long> res;
@@ -54,7 +59,11 @@ std::string LeaderStorage::addNode(Message::node node, Report::hardware_result h
         if(!monitored) {
             query << " \"" << this->nodeM.id <<"\")";
         }else {
+            // block report about this leader from other nodes
+            if (monitored->id == this->nodeM.id)
+                return "";
             query << " \""<< monitored->id <<"\")";
+            printf("report: %s --> %s lasttime: %ld\n",monitored->id.c_str(), node.ip.c_str(),hardware.lasttime);
         }
         int err = sqlite3_exec(this->db, query.str().c_str(), 0, 0, &zErrMsg);
         isError(err, zErrMsg, "addNodeLeader1");
@@ -102,6 +111,9 @@ vector<Message::node> LeaderStorage::getNodes() {
 }
 
 void LeaderStorage::addTest(Message::node nodeA, Message::node nodeB, Report::test_result test, string type) {
+    if(test.lasttime == 0) { //these are directly measured
+        return;
+    }
     char *zErrMsg = 0;
     char buf[2048];
     //printf("Saving: %s %s %s %f\n",nodeA.ip.c_str(),nodeB.ip.c_str(),type.c_str(),test.mean);
@@ -111,16 +123,16 @@ void LeaderStorage::addTest(Message::node nodeA, Message::node nodeB, Report::te
                         "   VALUES (\"%s\", \"%s\", %f, %f, DATETIME(%" PRId64",\"unixepoch\"), 0, 0, DATETIME('now', '-1 month'))"
                         "; "
                         "UPDATE MLinks SET meanL = %f, varianceL = %f, lasttimeL = DATETIME(%" PRId64",\"unixepoch\") "
-                        "   WHERE idA = \"%s\" AND idB = \"%s\"",
-                        nodeA.id.c_str(), nodeB.id.c_str(), test.mean, test.variance, test.lasttime, test.mean, test.variance, test.lasttime, nodeA.id.c_str(), nodeB.id.c_str());
+                        "   WHERE idA = \"%s\" AND idB = \"%s\" AND (lasttimeL < DATETIME(%" PRId64",\"unixepoch\") OR lasttimeL is Null)",
+                        nodeA.id.c_str(), nodeB.id.c_str(), test.mean, test.variance, test.lasttime, test.mean, test.variance, test.lasttime, nodeA.id.c_str(), nodeB.id.c_str(), test.lasttime);
     }else if(type == string("Bandwidth")) {
         std::sprintf(buf,
                         "INSERT OR IGNORE INTO MLinks (idA, idB, meanB, varianceB, lasttimeB, meanL, varianceL, lasttimeL) "
                         "   VALUES (\"%s\", \"%s\", %f, %f, DATETIME(%" PRId64",\"unixepoch\"), 0, 0, DATETIME('now', '-1 month'))"
                         "; "
                         "UPDATE MLinks SET meanB = %f, varianceB = %f, lasttimeB = DATETIME(%" PRId64",\"unixepoch\") "
-                        "   WHERE idA = \"%s\" AND idB = \"%s\"",
-                        nodeA.id.c_str(), nodeB.id.c_str(), test.mean, test.variance, test.lasttime, test.mean, test.variance, test.lasttime, nodeA.id.c_str(), nodeB.id.c_str());
+                        "   WHERE idA = \"%s\" AND idB = \"%s\" AND (lasttimeB < DATETIME(%" PRId64",\"unixepoch\") OR lasttimeB is Null)",
+                        nodeA.id.c_str(), nodeB.id.c_str(), test.mean, test.variance, test.lasttime, test.mean, test.variance, test.lasttime, nodeA.id.c_str(), nodeB.id.c_str(), test.lasttime);
     }
 
 
@@ -159,13 +171,13 @@ void LeaderStorage::addReportBandwidth(Message::node node, vector<Report::test_r
 
 void LeaderStorage::addReport(Report::report_result result, Message::node *monitored) {
     if( this->addNode(result.source, result.hardware, monitored) != "") {
-        this->addReportLatency(result.source, result.latency);
+        this->addReportLatency(result.source, result.latency);        
         this->addReportBandwidth(result.source, result.bandwidth);
         this->addReportIot(result.source, result.iot);
     }
 }
 
-void LeaderStorage::addReport(std::vector<Report::report_result> results, Message::node node) {
+void LeaderStorage::addReport(std::vector<Report::report_result> results, Message::node node) {                    
     for(auto &result : results) {
         if(result.source.ip == string("::1"))
             result.source.ip = node.ip;
@@ -180,6 +192,7 @@ void LeaderStorage::addReport(std::vector<Report::report_result> results, Messag
         Message::node leader(result.leader,"","");
         this->addNode(result.source, result.hardware, &leader);
     }
+
     for(auto result : results) {
         Message::node leader(result.leader,"","");
         this->addReport(result, &leader);
@@ -278,7 +291,7 @@ vector<Report::report_result> LeaderStorage::getReport() {
 Report::hardware_result LeaderStorage::getHardware(Message::node node) {
     char *zErrMsg = 0;
     char buf[1024];
-    std::sprintf(buf,"SELECT *, strftime('%%s','now') as lasttime FROM MNodes WHERE id = \"%s\" GROUP BY ip", node.id.c_str());
+    std::sprintf(buf,"SELECT *, (CASE WHEN \"%s\" = N.monitoredBy THEN strftime('%%s','now') ELSE strftime('%%s',lasttime) END) as lasttime FROM MNodes as N WHERE id = \"%s\" GROUP BY ip", this->nodeM.id.c_str(),node.id.c_str());
 
     Report::hardware_result r(-1,0,0,0,0,0,0);
 
@@ -336,7 +349,7 @@ Report::report_result LeaderStorage::getReport(Message::node node) {
 }
 
 
-void LeaderStorage::removeOldLNodes(int seconds) {
+vector<Message::node> LeaderStorage::removeOldLNodes(int seconds) {
     char *zErrMsg = 0;
     char buf[1024];
     sqlite3_exec(db, "BEGIN TRANSACTION;", NULL, NULL, NULL);
@@ -347,8 +360,23 @@ void LeaderStorage::removeOldLNodes(int seconds) {
     int err = sqlite3_exec(this->db, buf, IStorage::VectorStringCallback, &leaders, &zErrMsg);
     isError(err, zErrMsg, "removeOldLNodesLeader1");
 
+    std::sprintf(buf,"SELECT max(lasttime)-strftime('%%s','now') FROM MNodes GROUP BY monitoredBy having strftime('%%s',max(lasttime))+%d-strftime('%%s','now') <= 0",seconds);
+    vector<int> lasttimes;
+
+    err = sqlite3_exec(this->db, buf, IStorage::VectorIntCallback, &lasttimes, &zErrMsg);
+    isError(err, zErrMsg, "removeOldLNodesLeader1");
+
+    for(auto lasttime : lasttimes) {
+        printf("Lasttime: %d\n", lasttime);
+    }
+
+    vector<Message::node> rem;
+
     for(string leader : leaders) {
-        printf("Delete leader: %s", leader.c_str());
+        if(leader == this->nodeM.id)
+            continue;
+        printf("Delete leader: %s\n", leader.c_str());
+        rem.push_back(Message::node(leader,"",""));
         std::sprintf(buf,"DELETE FROM MMNodes WHERE id = \"%s\"", leader.c_str());
         err = sqlite3_exec(this->db, buf, 0, 0, &zErrMsg);
         isError(err, zErrMsg, "removeOldNodesLeader2");
@@ -363,6 +391,7 @@ void LeaderStorage::removeOldLNodes(int seconds) {
         isError(err, zErrMsg, "removeOldNodesLeader4");
 
         for(string id : ids) {
+            rem.push_back(Message::node(id,"",""));
             std::sprintf(buf,"DELETE FROM MLinks WHERE idA = \"%s\" OR idB = \"%s\"", id.c_str(),id.c_str());
             err = sqlite3_exec(this->db, buf, 0, 0, &zErrMsg);
             isError(err, zErrMsg, "removeOldLNodesLeader5");
@@ -372,10 +401,37 @@ void LeaderStorage::removeOldLNodes(int seconds) {
             isError(err, zErrMsg, "removeOldLNodesLeader6");
         }
     }
-    sqlite3_exec(db, "END TRANSACTION;", NULL, NULL, NULL);     
+
+    // removing also other leaders node that do not respond anymore
+    vector<Message::node> vec;
+
+    std::sprintf(buf,"SELECT id,ip,port FROM MNodes WHERE monitoredBy <> \"%s\" AND strftime('%%s',lasttime)+%d-strftime('%%s','now') <= 0 ORDER BY lasttime LIMIT %d", this->nodeM.id.c_str(), seconds);
+    err = sqlite3_exec(this->db, buf, VectorNodeCallback, &vec, &zErrMsg);
+    isError(err, zErrMsg, "removeOldLNodesLeader7");
+
+
+    std::sprintf(buf,"DELETE FROM MNodes WHERE monitoredBy <> \"%s\" AND strftime('%%s',lasttime)+%d-strftime('%%s','now') <= 0", this->nodeM.id.c_str(), seconds);
+    err = sqlite3_exec(this->db, buf, 0, 0, &zErrMsg);
+    isError(err, zErrMsg, "removeOldLNodesLeader8");
+
+    for(auto node : vec) {
+        printf("Delete followerL: %s\n", node.ip.c_str());
+        std::sprintf(buf,"DELETE FROM MLinks WHERE idA = \"%s\" OR idB = \"%s\"", node.id.c_str(),node.id.c_str());
+        err = sqlite3_exec(this->db, buf, 0, 0, &zErrMsg);
+        isError(err, zErrMsg, "removeOldLNodesLeader9");
+
+        std::sprintf(buf,"DELETE FROM MIots WHERE idNode = \"%s\"", node.id.c_str());
+        err = sqlite3_exec(this->db, buf, 0, 0, &zErrMsg);
+        isError(err, zErrMsg, "removeOldLNodesLeader10");
+    }
+
+    sqlite3_exec(db, "END TRANSACTION;", NULL, NULL, NULL);
+
+    rem.insert(rem.end(), vec.begin(), vec.end());
+    return rem;
 }
 
-void LeaderStorage::removeOldNodes(int seconds) {
+vector<Message::node> LeaderStorage::removeOldNodes(int seconds) {
     char *zErrMsg = 0;
     char buf[1024];
 
@@ -388,7 +444,7 @@ void LeaderStorage::removeOldNodes(int seconds) {
     isError(err, zErrMsg, "removeOldNodesLeader1");
 
     for(auto node : vec) {
-        printf("Delete follower: %s", node.ip.c_str());
+        printf("Delete follower: %s\n", node.ip.c_str());
         std::sprintf(buf,"DELETE FROM MLinks WHERE idA = \"%s\" OR idB = \"%s\"", node.id.c_str(),node.id.c_str());
         err = sqlite3_exec(this->db, buf, 0, 0, &zErrMsg);
         isError(err, zErrMsg, "removeOldNodesLeader2");
@@ -397,7 +453,8 @@ void LeaderStorage::removeOldNodes(int seconds) {
         err = sqlite3_exec(this->db, buf, 0, 0, &zErrMsg);
         isError(err, zErrMsg, "removeOldNodesLeader3");
     }
-    sqlite3_exec(db, "END TRANSACTION;", NULL, NULL, NULL);    
+    sqlite3_exec(db, "END TRANSACTION;", NULL, NULL, NULL);
+    return vec;   
 }
 
 void LeaderStorage::removeChangeRole(std::vector<Message::node> leaders) {
@@ -420,7 +477,7 @@ void LeaderStorage::removeChangeRole(std::vector<Message::node> leaders) {
     sqlite3_exec(db, "BEGIN TRANSACTION;", NULL, NULL, NULL);
 
     for(auto node : vec) {
-        printf("Delete leader (change): %s", node.ip.c_str());
+        printf("Delete leader (change): %s\n", node.ip.c_str());
         string leader = node.id;
         std::sprintf(buf,"DELETE FROM MMNodes WHERE id = \"%s\"", leader.c_str());
         int err = sqlite3_exec(this->db, buf, 0, 0, &zErrMsg);

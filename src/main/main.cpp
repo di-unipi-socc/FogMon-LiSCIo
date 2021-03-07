@@ -41,7 +41,7 @@ int main(int argc, char *argv[]) {
     string ipR = "";
     string portR = "5555";
     string myPort = "5555";
-    int threads = 2;
+    int threads = 5;
     int time_heartbeat = 120;
     int time_propagation = 20;
 

@@ -12,20 +12,23 @@ def deaggregate(cursor):
     return vals
 
 def clean_results(results):
-    item = {}
-    data = []
+    # for result in results:
+    #     result.pop("_id")
+    return list(results)
+    # item = {}
+    # data = []
     
-    for result in results:
-        item = {}
-        for k,v in result.items():
-            if k == "_id":
-                v = str(v)
-            item[k] = v
-        data.append(item)
-    return data
+    # for result in results:
+    #     item = {}
+    #     for k,v in result.items():
+    #         if k == "_id":
+    #             v = str(v)
+    #         item[k] = v
+    #     data.append(item)
+    # return data
 
 def get_footprints(session):
-    return mongo.db.footprint.find_one({"session":session})
+    return mongo.db.footprint.find_one({"session":session},projection={'_id': False})
 
 def save_footprint(session, data):
     item = {"session":session, "data":data}
@@ -43,20 +46,20 @@ def get_updates(session, begin=None, end=None):
     if begin is not None or end is not None:
         query["datetime"] = query_date
 
-    cursor = mongo.db.update.find(query).sort([("datetime", -1)])
+    cursor = mongo.db.update.find(query, projection={'_id': False}).sort([("datetime", -1)])
     return clean_results(cursor)
 
 def get_spec(session):
-    cursor = mongo.db.spec.find({"session": session})
+    cursor = mongo.db.spec.find({"session": session}, projection={'_id': False})
     return clean_results(cursor)[0]
 
 def get_leaders(session):
-    cursor = mongo.db.update.find({"session": session}).sort([("datetime", -1)])
+    cursor = mongo.db.update.find({"session": session}, projection={'_id': False}).sort([("datetime", -1)])
     logging.info(cursor[0])
     ids = [el["id"] for el in cursor[0]["update"]["selected"]]
     return ids
 
-def get_reports(session, ids=None, begin=None, end=None):
+def get_reports(session, ids=None, begin=None, end=None, limit=0):
     # return reports from begin date to end date (if set)
     # if ids is set then filter the id of the sender, checking if is in ids
     # in reverse order
@@ -71,7 +74,9 @@ def get_reports(session, ids=None, begin=None, end=None):
     if ids is not None:
         query["sender.id"] = {"$in": ids }
 
-    cursor = mongo.db.reports.find(query).sort([("datetime", -1)])
+    cursor = mongo.db.reports.find(query, projection={'_id': False}).sort([("datetime", -1)])
+    if limit != 0:
+        cursor.limit(limit)
     return clean_results(cursor)
 
 def get_lastreports(session):

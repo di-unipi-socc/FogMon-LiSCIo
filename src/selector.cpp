@@ -97,7 +97,7 @@ bool Selector::updateSelection(Message::leader_update update) {
     return false;
 }
 
-bool Selector::checkSelection(bool doit) {
+bool Selector::checkSelection(bool qualityCheck, bool doit) {
 
     if(doit) {
         printf("STARTING SELECTION (forced)\n");
@@ -113,13 +113,13 @@ bool Selector::checkSelection(bool doit) {
     bool check = false;
     int formula = this->parent->node->leaderFormula;
     if (formula == -2)
-        check = sqrt(nF)*2 >= nL+1;
+        check = trunc(sqrt(nF)*2) >= nL+1;
     else if (formula == -1)
-        check = sqrt(nF)/1.55 >= nL+1;
+        check = trunc(sqrt(nF)/2) >= nL+1;
     else if(formula > 0)
         check = formula != nL;
     else
-        check = sqrt(nF) >= nL+1;
+        check = trunc(sqrt(nF)) >= nL+1;
 
 
     if(check) {
@@ -127,44 +127,46 @@ bool Selector::checkSelection(bool doit) {
         this->startSelection();
         return true;
     }
-    try {
-        //calculate with a script the update and set the id on it
-        const char *args[] = {"./scripts/quality.py",NULL};
-        ReadProc * proc = new ReadProc((char**)args);
+    if(qualityCheck) {
+        try {
+            //calculate with a script the update and set the id on it
+            const char *args[] = {"./scripts/quality.py",NULL};
+            ReadProc * proc = new ReadProc((char**)args);
 
-        {
-            std::lock_guard<std::mutex> lock(this->clusterMutex);
-            if(this->clusterProc) {
-                delete this->clusterProc;
+            {
+                std::lock_guard<std::mutex> lock(this->clusterMutex);
+                if(this->clusterProc) {
+                    delete this->clusterProc;
+                }
+                this->clusterProc = proc;
             }
-            this->clusterProc = proc;
-        }
 
-        int res = proc->waitproc();
+            int res = proc->waitproc();
 
-        if(res != 0) {
-            return false;
-        }
+            if(res != 0) {
+                return false;
+            }
 
-        string output = proc->readoutput();
-        rapidjson::Document doc;
-        rapidjson::ParseResult ok = doc.Parse((const char*)output.c_str());
-        if(!ok)
-            return false;
-        
-        if( !doc.HasMember("quality") || !doc["quality"].IsDouble()) {
-            return false;
+            string output = proc->readoutput();
+            rapidjson::Document doc;
+            rapidjson::ParseResult ok = doc.Parse((const char*)output.c_str());
+            if(!ok)
+                return false;
+            
+            if( !doc.HasMember("quality") || !doc["quality"].IsDouble()) {
+                return false;
+            }
+            
+            float quality = (float)doc["quality"].GetDouble();
+            printf("quality check (cost = %f)\n",quality);
+            if(quality > 5){
+                printf("STARTING SELECTION (bad quality)\n");
+                this->startSelection();
+                return true;
+            }
+        }catch(...) {
+            printf("Exception in quality test.\n");
         }
-        
-        float quality = (float)doc["quality"].GetDouble();
-        printf("quality check (cost = %f)\n",quality);
-        if(quality > 3){
-            printf("STARTING SELECTION (bad quality)\n");
-            this->startSelection();
-            return true;
-        }
-    }catch(...) {
-        printf("Exception in quality test.\n");
     }
     return false;
 }

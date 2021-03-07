@@ -98,6 +98,8 @@ void Node::demote() {
 }
 
 void Node::restart() {
+    sleep(1);
+    sleep(1);
     this->stop();
     this->create();
     this->start();

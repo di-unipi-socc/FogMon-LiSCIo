@@ -1,6 +1,7 @@
 #include "storage.hpp"
 #include "iagent.hpp"
 #include <string.h>
+#include <sstream>
 #include <iostream>
 #include <inttypes.h>
 
@@ -93,14 +94,29 @@ Report::hardware_result Storage::getHardware() {
 std::vector<Report::test_result> Storage::getLatency(int sensitivity, int64_t last) {
     char *zErrMsg = 0;
     char buf[1024];
-    std::sprintf(buf,"SELECT N.id, N.ip, N.port, avg(L.ms) AS mean, variance(L.ms) AS var, strftime('%%s',max(L.time)) as time FROM Latency AS L JOIN       Nodes AS N WHERE L.idNodeB = N.id GROUP BY N.id HAVING ( abs(N.lastMeanL-avg(L.ms))/abs(N.lastMeanL) > (%d/100) OR abs(N.lastVarianceL-variance(L.ms))/abs(N.lastVarianceL) > (%d/100)) AND strftime('%%s',max(L.time))>%" PRId64, sensitivity, sensitivity,last);
+    stringstream query;
+    query << "FROM Latency AS L JOIN Nodes AS N WHERE L.idNodeB = N.id GROUP BY N.id HAVING ((abs(N.lastMeanL-avg(L.ms))/abs(N.lastMeanL) >= ("<< sensitivity <<"/100) OR abs(N.lastVarianceL-variance(L.ms))/abs(N.lastVarianceL) >= ("<< sensitivity <<"/100)) AND strftime('%s',max(L.time))>" << last << ") OR strftime('%s','now')-N.latencyTime > 180";
+    std::sprintf(buf,"SELECT N.id, N.ip, N.port, avg(L.ms) AS mean, variance(L.ms) AS var, strftime('%%s',max(L.time)) as time %s", query.str().c_str());
 
     vector<Report::test_result> tests;
 
     int err = sqlite3_exec(this->db, buf, IStorage::getTestCallback, &tests, &zErrMsg);
     isError(err, zErrMsg, "getLatency");
-
     filterSend(tests);
+
+    char buf2[2048];
+    std::sprintf(buf2,  "INSERT OR REPLACE INTO Nodes (id,ip,port, latencyTime, lastMeanL, lastVarianceL, bandwidthTime, bandwidthState, lastMeanB, lastVarianceB) "
+                        " SELECT A.id AS id, A.ip AS ip, A.port AS port, R.time AS latencyTime, "
+                        "  R.mean AS lastMeanL, R.var AS lastVarianceL,"
+                        "  A.bandwidthTime AS bandwidthTime, A.bandwidthState AS bandwidthState,"
+                        "  A.lastMeanB AS lastMeanB, A.lastVarianceB AS lastVarianceB"
+                        " FROM Nodes AS A"
+                        "  JOIN (SELECT N.id, max(L.time) as time, avg(L.ms) AS mean, variance(L.ms) AS var %s) AS R "
+                        " WHERE A.id == R.id ",query.str().c_str());
+
+    //std::sprintf(buf2,"update Nodes SET latencyTime = R.time, lastMeanL = R.mean, lastVarianceL = R.var FROM Nodes JOIN (SELECT N.id, max(L.time) as time, avg(L.ms) AS mean, variance(L.ms) AS var %s) as R WHERE id == R.id", query.str().c_str());
+    err = sqlite3_exec(this->db, buf2, 0, 0, &zErrMsg);
+    isError(err, zErrMsg, "getLatency2");
 
     return tests;
 }
@@ -108,33 +124,52 @@ std::vector<Report::test_result> Storage::getLatency(int sensitivity, int64_t la
 std::vector<Report::test_result> Storage::getBandwidth(int sensitivity, int64_t last) {
     char *zErrMsg = 0;
     char buf[1024];
-    std::sprintf(buf,"SELECT N.id, N.ip, N.port, avg(B.kbps) AS mean, variance(B.kbps) AS var, strftime('%%s',max(B.time)) as time FROM Bandwidth AS B JOIN Nodes AS N WHERE B.idNodeB = N.id GROUP BY N.id HAVING ( abs(N.lastMeanB-avg(B.kbps))/abs(N.lastMeanB) > (%d/100) OR abs(N.lastVarianceB-variance(B.kbps))/abs(N.lastVarianceB) > (%d/100)) AND strftime('%%s',max(B.time))>%" PRId64, sensitivity, sensitivity, last);
+    //std::sprintf(buf,"SELECT N.id, N.ip, N.port, avg(B.kbps) AS mean, variance(B.kbps) AS var, strftime('%%s',max(B.time)) as time FROM Bandwidth AS B JOIN Nodes AS N WHERE B.idNodeB = N.id GROUP BY N.id HAVING (( abs(N.lastMeanB-avg(B.kbps))/abs(N.lastMeanB) > (%d/100) OR abs(N.lastVarianceB-variance(B.kbps))/abs(N.lastVarianceB) > (%d/100)) AND strftime('%%s',max(B.time))>%" PRId64 ") OR strftime('%%s','now')-%" PRId64 ">300", sensitivity, sensitivity, last,last);
+
+    stringstream query;
+    query << "FROM Bandwidth AS B JOIN Nodes AS N WHERE B.idNodeB = N.id GROUP BY N.id HAVING ((abs(N.lastMeanB-avg(B.kbps))/abs(N.lastMeanB) >= ("<< sensitivity <<"/100) OR abs(N.lastVarianceB-variance(B.kbps))/abs(N.lastVarianceB) >= ("<< sensitivity <<"/100)) AND strftime('%s',max(B.time))>" << last << ") OR strftime('%s','now')-N.bandwidthTime > 180";
+    std::sprintf(buf,"SELECT N.id, N.ip, N.port, avg(B.kbps) AS mean, variance(B.kbps) AS var, strftime('%%s',max(B.time)) as time %s", query.str().c_str());
+
 
     vector<Report::test_result> tests;
 
     int err = sqlite3_exec(this->db, buf, IStorage::getTestCallback, &tests, &zErrMsg);
     isError(err, zErrMsg, "getBandwidth");
     filterSend(tests);
+
+    char buf2[2048];
+    std::sprintf(buf2,  "INSERT OR REPLACE INTO Nodes (id,ip,port, latencyTime, lastMeanL, lastVarianceL, bandwidthTime, bandwidthState, lastMeanB, lastVarianceB) "
+                        " SELECT A.id AS id, A.ip AS ip, A.port AS port, A.bandwidthTime AS latencyTime, "
+                        "  A.lastMeanl AS lastMeanL, A.lastVariancel AS lastVarianceL,"
+                        "  R.time AS bandwidthTime, A.bandwidthState AS bandwidthState,"
+                        "  R.mean AS lastMeanB, R.var AS lastVarianceB"
+                        " FROM Nodes AS A"
+                        "  JOIN (SELECT N.id, max(B.time) as time, avg(B.kbps) AS mean, variance(B.kbps) AS var %s) AS R "
+                        " WHERE A.id == R.id ",query.str().c_str());
+    //std::sprintf(buf2,"update Nodes SET bandwidthTime = R.time, lastMeanB = R.mean, lastVarianceB = R.var FROM Nodes JOIN (SELECT N.id, max(B.time) as time, avg(B.kbps) AS mean, variance(B.kbps) AS var %s) as R WHERE id == R.id", query.str().c_str());
+    err = sqlite3_exec(this->db, buf2, 0, 0, &zErrMsg);
+    isError(err, zErrMsg, "getBandwidth2");
+
     return tests;
 }
 
 void Storage::saveState(int64_t last, int sensitivity) {
     char *zErrMsg = 0;
     char buf[2048];
-    std::sprintf(buf,   "INSERT OR REPLACE INTO Nodes (id,ip,port, latencyTime, lastMeanL, lastVarianceL, bandwidthTime, bandwidthState, lastMeanB, lastVarianceB) "
-                        " SELECT A.id AS id, A.ip AS ip, A.port AS port, A.latencyTime AS latencyTime, "
-                        " L.mean AS lastMeanL, L.var AS lastVarianceL,"
-                        " A.bandwidthTime AS bandwidthTime, A.bandwidthState AS bandwidthState,"
-                        " B.mean AS lastMeanB, B.var AS lastVarianceB"
-                        " from Nodes AS A"
-                        " join (SELECT N.id as id, avg(L1.ms) AS mean, variance(L1.ms) AS var FROM Latency AS L1 JOIN Nodes AS N WHERE L1.idNodeB = N.id group by N.id HAVING ( abs(N.lastMeanL-avg(L1.ms))/abs(N.lastMeanL) > (%d/100) OR abs(N.lastVarianceL-variance(L1.ms))/abs(N.lastVarianceL) > (%d/100)) AND strftime('%%s',max(L1.time))>%" PRId64 ") AS L "
-                        " join (SELECT N.id as id, avg(B1.kbps) AS mean, variance(B1.kbps) AS var FROM Bandwidth AS B1 JOIN Nodes AS N WHERE B1.idNodeB = N.id group by N.id HAVING ( abs(N.lastMeanB-avg(B1.kbps))/abs(N.lastMeanB) > (%d/100) OR abs(N.lastVarianceB-variance(B1.kbps))/abs(N.lastVarianceB) > (%d/100)) AND strftime('%%s',max(B1.time))>%" PRId64 ") AS B "
-                        " WHERE A.id == L.id AND A.id == L.id ",
-                        sensitivity, sensitivity, last, sensitivity, sensitivity, last);
+    // std::sprintf(buf,   "INSERT OR REPLACE INTO Nodes (id,ip,port, latencyTime, lastMeanL, lastVarianceL, bandwidthTime, bandwidthState, lastMeanB, lastVarianceB) "
+    //                     " SELECT A.id AS id, A.ip AS ip, A.port AS port, A.latencyTime AS latencyTime, "
+    //                     " L.mean AS lastMeanL, L.var AS lastVarianceL,"
+    //                     " A.bandwidthTime AS bandwidthTime, A.bandwidthState AS bandwidthState,"
+    //                     " B.mean AS lastMeanB, B.var AS lastVarianceB"
+    //                     " from Nodes AS A"
+    //                     " join (SELECT N.id as id, avg(L1.ms) AS mean, variance(L1.ms) AS var %s) AS L "
+    //                     " join (SELECT N.id as id, avg(B1.kbps) AS mean, variance(B1.kbps) AS var %s) AS B "
+    //                     " WHERE A.id == L.id AND A.id == L.id ",
+    //                     sensitivity, sensitivity, last, sensitivity, sensitivity, last);
 
 
-    int err = sqlite3_exec(this->db, buf, 0, 0, &zErrMsg);
-    isError(err, zErrMsg, "saveState");
+    //int err = sqlite3_exec(this->db, buf, 0, 0, &zErrMsg);
+    //isError(err, zErrMsg, "saveState");
 
 }
 
@@ -149,10 +184,10 @@ void Storage::saveLatencyTest(Message::node node, int ms, int window) {
     int err = sqlite3_exec(this->db, buf, 0, 0, &zErrMsg);
     isError(err, zErrMsg, "saveLatencyTest1");
 
-    std::sprintf(buf,"UPDATE Nodes SET latencyTime = DATETIME('now') WHERE id = \"%s\"", node.id.c_str());
+    //std::sprintf(buf,"UPDATE Nodes SET latencyTime = DATETIME('now') WHERE id = \"%s\"", node.id.c_str());
 
-    err = sqlite3_exec(this->db, buf, 0, 0, &zErrMsg);
-    isError(err, zErrMsg, "saveLatencyTest2");
+    //err = sqlite3_exec(this->db, buf, 0, 0, &zErrMsg);
+    //isError(err, zErrMsg, "saveLatencyTest2");
 
     std::sprintf(buf,"DELETE FROM Latency WHERE time <= (SELECT time FROM Latency WHERE idNodeB = \"%s\" ORDER BY time DESC LIMIT 1 OFFSET %d)",node.id.c_str(), window);
 
@@ -171,10 +206,10 @@ void Storage::saveBandwidthTest(Message::node node, float kbps, int state, int w
     int err = sqlite3_exec(this->db, buf, 0, 0, &zErrMsg);
     isError(err, zErrMsg, "saveBandwidthTest1");
 
-    std::sprintf(buf,"UPDATE Nodes SET bandwidthTime = DATETIME('now'), bandwidthState = %d WHERE id = \"%s\"", state, node.id.c_str());
+    //std::sprintf(buf,"UPDATE Nodes SET bandwidthTime = DATETIME('now'), bandwidthState = %d WHERE id = \"%s\"", state, node.id.c_str());
 
-    err = sqlite3_exec(this->db, buf, 0, 0, &zErrMsg);
-    isError(err, zErrMsg, "saveBandwidthTest2");
+    //err = sqlite3_exec(this->db, buf, 0, 0, &zErrMsg);
+    //isError(err, zErrMsg, "saveBandwidthTest2");
 
     std::sprintf(buf,"DELETE FROM Bandwidth WHERE time <= (SELECT time FROM Bandwidth WHERE idNodeB = \"%s\" ORDER BY time DESC LIMIT 1 OFFSET %d)",node.id.c_str(),window);
 
@@ -279,7 +314,7 @@ vector<Message::node> Storage::getNodes() {
 std::vector<Message::node> Storage::getLRLatency(int num, int seconds) {
     char *zErrMsg = 0;
     char buf[1024];
-    std::sprintf(buf,"SELECT id,ip,port FROM Nodes WHERE strftime('%%s',latencyTime)+%d-strftime('%%s','now') <= 0 ORDER BY latencyTime LIMIT %d",seconds, num);
+    std::sprintf(buf,"SELECT N.id,N.ip,N.port FROM Nodes as N LEFT JOIN latency as L ON N.id == L.idNodeB GROUP BY N.id HAVING (strftime('%%s',IFNULL(max(L.time),0))+%d-strftime('%%s','now') <= 0) ORDER BY IFNULL(max(L.time),0) LIMIT %d",seconds, num);
 
     vector<Message::node> nodes;
 
@@ -292,7 +327,8 @@ std::vector<Message::node> Storage::getLRLatency(int num, int seconds) {
 std::vector<Message::node> Storage::getLRBandwidth(int num, int seconds) {
     char *zErrMsg = 0;
     char buf[1024];
-    std::sprintf(buf,"SELECT id,ip,port FROM Nodes WHERE strftime('%%s',bandwidthTime)+%d-strftime('%%s','now') <= 0 ORDER BY RANDOM() LIMIT %d",seconds, num);
+    //                SELECT N.id,N.ip,N.port FROM Nodes as N LEFT JOIN bandwidth as B ON N.id == B.idNodeB GROUP BY N.id HAVING (strftime('%s',IFNULL(max(B.time),0))+600-strftime('%s','now') <= 0) ORDER BY IFNULL(max(B.time),0) LIMIT 100
+    std::sprintf(buf,"SELECT N.id,N.ip,N.port FROM Nodes as N LEFT JOIN bandwidth as B ON N.id == B.idNodeB GROUP BY N.id HAVING (strftime('%%s',IFNULL(max(B.time),0))+%d-strftime('%%s','now') <= 0) ORDER BY IFNULL(max(B.time),0) LIMIT %d",seconds, num);
 
     vector<Message::node> nodes;
 
