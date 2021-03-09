@@ -38,8 +38,6 @@ class Clusterer:
         for i in range(self.N):
             self.D[self.Nodes[i]]=i
 
-        print(Links)
-        print(self.Nodes)
 
         self.A = [[Links[i][j] for j in self.Nodes] for i in self.Nodes]
 
@@ -67,7 +65,6 @@ class Clusterer:
         mini = math.inf
         data = None
         for _ in range(tries):
-
             # create K-Medoids algorithm for processing distance matrix instead of points
             kmedoids_instance = kmedoids(self.A, self.initial_medoids, data_type='distance_matrix')
             # run cluster analysis and obtain results

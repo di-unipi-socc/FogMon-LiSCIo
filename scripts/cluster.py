@@ -44,7 +44,6 @@ for a in c.execute('SELECT * FROM MLinks'):
             avg += a[2]
             n+=1
     except:
-        raise
         pass
 
 c.close()

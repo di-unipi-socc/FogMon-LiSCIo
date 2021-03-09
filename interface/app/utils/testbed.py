@@ -30,7 +30,6 @@ def get_sessions():
         if not found:
             session["specs"] = True
             sessions.append(session)
-    logging.info(str(sessions))
     return sessions
 
 def get_session(session):
@@ -123,6 +122,7 @@ def remove(session):
         with mongo_session.start_transaction():
             mongo.db.update.remove({"session": session})
             mongo.db.reports.remove({"session": session})
+            mongo.db.footprint.remove({"session": session})
 
 
 

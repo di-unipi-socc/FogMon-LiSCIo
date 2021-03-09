@@ -110,7 +110,7 @@ ILeaderStorage* Leader::getStorage() {
 }
 
 void Leader::timerFun() {
-    int iter = 1;
+    this->iter = 1;
     while(this->running) {
         //routine for Nodes
         auto t_start = std::chrono::high_resolution_clock::now();
@@ -135,15 +135,17 @@ void Leader::timerFun() {
         ips = this->getStorage()->getMNodes();
 
         int num = ips.size();
+        bool force = true;
         if (num<1)
             num = 1;
         int time = (int)(this->node->timePropagation*( log2(num)*3+2 ));
         if (iter < 20) {
+            force = false;
             time += this->node->timePropagation*10;
         }
         printf("Check old nodes %d\n",time);
         
-        rem = this->getStorage()->removeOldLNodes(time); // remove old leaders that do not update in a logarithmic time
+        rem = this->getStorage()->removeOldLNodes(time, force); // remove old leaders that do not update in a logarithmic time
         tmp = this->getStorage()->removeOldNodes(this->node->timeheartbeat); // remove followers that do not update in heartbeat time
         //inform other nodes of the removals
         rem.insert(rem.end(),tmp.begin(),tmp.end());
@@ -177,7 +179,7 @@ void Leader::timerFun() {
                 UIConnection conn(this->getMyNode(),this->node->interfaceIp, this->node->session);
                 conn.sendTopology(report);
             }
-            if((iter % (4*1)) == 0) {
+            if((iter % (4*2)) == 0) {
                 bool param = iter % (4*2*6) == 0;
                 this->selector.checkSelection(param);
             }
@@ -251,7 +253,6 @@ void Leader::changeRole(vector<Message::node> leaders) {
     this->storage->removeChangeRole(leaders);
     printf("B\n");
     fflush(stdout);
-    this->selector.stopSelection();
     if(!present) {
         printf("C\n");
         fflush(stdout);
@@ -261,9 +262,11 @@ void Leader::changeRole(vector<Message::node> leaders) {
         this->node->demote();
         printf("E\n");
         fflush(stdout);
-    }else {        
+    }else {
+        this->iter = 1;       
         sleeper.sleepFor(chrono::seconds(10));
-
+        printf("F\n");
+        fflush(stdout);
         for(auto ip : leaders) {
             if(ip.id == this->getMyNode().id)
                 continue;
@@ -274,6 +277,11 @@ void Leader::changeRole(vector<Message::node> leaders) {
                 }
             }
         }
+        printf("G\n");
+        fflush(stdout);
+        this->selector.stopSelection();
+        printf("H\n");
+        fflush(stdout);
     }
 }
 

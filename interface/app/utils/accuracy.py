@@ -225,8 +225,8 @@ def stabilities(session):
         stab = stabs[i]
         (begin,end,reports_change,changes) = stab
         if reports_change == None:
-            ((_,_,reports_change1,changes1),spec) = last
-            stab = ((begin,end,reports_change1,changes1),spec)
+            ((_,_,reports_change1,changes1),spec1) = last
+            stab = ((begin,end,reports_change1,changes1),spec1)
         else:
             stab = (stab,spec["specs"][i])
         ret.append(stab)

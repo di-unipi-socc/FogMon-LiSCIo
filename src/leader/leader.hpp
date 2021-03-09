@@ -40,6 +40,7 @@ protected:
     //for the leader selection algorithms
     Selector selector;
 
+    int iter;
     std::thread timerFunThread;    
 
     LeaderConnections *connections;

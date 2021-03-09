@@ -201,7 +201,7 @@ if __name__ == "__main__":
         topology.create_tree(6+mul,branch_out,(latency,bandwidth))
         selected = []
         cloud_high = random.sample(topology.return_level(2+mul),  num//10) # Central cloud         3
-        cloud_low = random.sample(topology.return_level(3+mul),   round(num/(20/3))) # Decentralised cloud   5
+        cloud_low = random.sample(topology.return_level(3+mul),   round(num/(20/3)+0.01)) # Decentralised cloud   5
         isp = random.sample(topology.return_level(4+mul),         num//4) # ISP                   12
         home = random.sample(topology.return_level(5+mul),        num//2) # Home                 20
                                                         # =32                        =40
@@ -217,12 +217,12 @@ if __name__ == "__main__":
                     continue
                 if M[0][i][j] == 0:
                     print(i,M[i])
-       
 
         clusterer = Clusterer([selected[0]],selected,M[0])
-            
-        data = clusterer.cluster(10)
         
+
+        data = clusterer.cluster(10)
+
         dim = len(selected)
         for c in data["clusters"]:
             if dim > len(c):

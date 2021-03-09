@@ -349,14 +349,19 @@ Report::report_result LeaderStorage::getReport(Message::node node) {
 }
 
 
-vector<Message::node> LeaderStorage::removeOldLNodes(int seconds) {
+vector<Message::node> LeaderStorage::removeOldLNodes(int seconds, bool force) {
     char *zErrMsg = 0;
     char buf[1024];
     sqlite3_exec(db, "BEGIN TRANSACTION;", NULL, NULL, NULL);
-    std::sprintf(buf,"SELECT monitoredBy FROM MNodes GROUP BY monitoredBy having strftime('%%s',max(lasttime))+%d-strftime('%%s','now') <= 0",seconds);
-
     vector<string> leaders;
 
+    if(force) {
+        //                SELECT L.id FROM MMNodes as L LEFT JOIN MNodes as N ON L.id==N.monitoredBy GROUP BY monitoredBy having strftime('%s',IFNULL(max(lasttime),0))+100-strftime('%s','now') <= 0
+        std::sprintf(buf,"SELECT L.id FROM MMNodes as L LEFT JOIN MNodes as N ON L.id==N.monitoredBy GROUP BY monitoredBy having strftime('%%s',IFNULL(max(lasttime),0))+%d-strftime('%%s','now') <= 0",seconds);
+    }else {
+        std::sprintf(buf,"SELECT monitoredBy FROM MNodes GROUP BY monitoredBy having strftime('%%s',max(lasttime))+%d-strftime('%%s','now') <= 0",seconds);
+    }
+    
     int err = sqlite3_exec(this->db, buf, IStorage::VectorStringCallback, &leaders, &zErrMsg);
     isError(err, zErrMsg, "removeOldLNodesLeader1");
 

@@ -28,11 +28,12 @@ def clean_results(results):
     # return data
 
 def get_footprints(session):
-    return mongo.db.footprint.find_one({"session":session},projection={'_id': False})
+    cursor = mongo.db.footprint.find({"session":session},projection={'_id': False}).sort([("moment", 1)])
+    return clean_results(cursor)
 
-def save_footprint(session, data):
-    item = {"session":session, "data":data}
-    mongo.db.footprint.replace_one({"session": session}, item, upsert=True)
+def save_footprint(session, moment, data):
+    item = {"session":session, "data":data, "moment": moment}
+    mongo.db.footprint.replace_one({"session": session, "moment": moment}, item, upsert=True)
 
 def get_updates(session, begin=None, end=None):
     # return updates from begin date to end date (if set)

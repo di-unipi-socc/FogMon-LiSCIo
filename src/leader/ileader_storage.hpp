@@ -34,7 +34,7 @@ public:
     virtual std::vector<Report::test_result> getLatency(Message::node ip) = 0;
     virtual std::vector<Report::test_result> getBandwidth(Message::node ip) = 0;
 
-    virtual std::vector<Message::node> removeOldLNodes(int seconds) = 0;
+    virtual std::vector<Message::node> removeOldLNodes(int seconds, bool force=false) = 0;
     virtual std::vector<Message::node> removeOldNodes(int seconds) = 0;
 
     virtual void removeChangeRole(std::vector<Message::node> leaders) = 0;

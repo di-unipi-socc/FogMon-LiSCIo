@@ -87,10 +87,16 @@ class Testbed:
             thread.join()
 
     def get_file(self, node, src_name, dst_name):
-        conn = Connection(node,
-            config = self.config)
-        print(src_name)
-        conn.get(src_name, dst_name)
+        for i in range(10):
+            try:
+                conn = Connection(node,
+                config = self.config)
+                conn.get(src_name, dst_name)
+                print(src_name)
+                return
+            except:
+                pass
+            sleep(5)
 
     def get_files(self, nodes: list, src_name: str, dst_name: str):
         threads = []
@@ -249,7 +255,7 @@ class Testbed:
             if len([r for r in results if int(results[r].stdout) != 1]) == 0:
                 return True
             print("Retry...",end=" ",flush=True)
-            sleep(1)
+            sleep(3)
         print("Not terminated")
         return False
 

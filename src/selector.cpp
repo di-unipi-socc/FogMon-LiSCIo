@@ -11,6 +11,7 @@ Selector::Selector(ILeader *leader) {
     this->clusterProc = NULL;
     sleeper.start();
     this->id = 0;
+    this->last = std::chrono::high_resolution_clock::now();
 }
 
 Selector::~Selector() {
@@ -33,14 +34,36 @@ bool Selector::initSelection(int id) {
     const std::lock_guard<std::mutex> lock(this->selectionMutex);
     if(this->status == READY) {
         if(this->id >= id) {
-            return false;
+            if(!this->checkOld())
+                return false;
         }
     }else if(this->status != FREE) {
-        return false;
+        if(!this->checkOld())
+            return false;
     }
     printf("init selection true\n");
+    this->last = std::chrono::high_resolution_clock::now();
     this->status = CHANGING; // TODO: change after some time CHANGING to FREE if no calcSelection arrived
     return true;
+}
+
+bool Selector::checkOld() {
+    auto now = std::chrono::high_resolution_clock::now();
+    auto elapsed_time = std::chrono::duration_cast<std::chrono::duration<float>>(now-this->last).count();
+
+    if(elapsed_time > 60*3) {
+        printf("old selection stopping\n");
+        status = FREE;
+
+        std::lock_guard<std::mutex> lock2(this->clusterMutex);
+        if(this->clusterProc) {
+            delete this->clusterProc;
+        }
+        this->clusterProc = NULL;
+        printf("old selection stopped\n");
+        return true;
+    }
+    return false;
 }
 
 bool Selector::calcSelection(Message::node from, int id, bool &res) {
@@ -237,9 +260,12 @@ void Selector::startSelection() {
         const std::lock_guard<std::mutex> lock(this->selectionMutex);
 
         if(status != FREE) {
-            printf("aborted selection\n");
-            return;
+            if(!this->checkOld()) {
+                printf("aborted selection1\n");
+                return;
+            }
         }
+        this->last = std::chrono::high_resolution_clock::now();
         this->id = random();
         status = READY;
     }
@@ -252,7 +278,7 @@ void Selector::startSelection() {
                 status = FREE;
             }
         }
-        printf("aborted selection\n");
+        printf("aborted selection2\n");
         return;
     }
 
@@ -265,7 +291,7 @@ void Selector::startSelection() {
             }
         }
         this->parent->getConnections()->sendEndSelection(Message::leader_update(),false);
-        printf("aborted selection\n");
+        printf("aborted selection3\n");
         return;
     }
 

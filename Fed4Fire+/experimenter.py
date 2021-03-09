@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+from os.path import expanduser
 import requests
 from spec import Spec
 from testbed import Testbed
@@ -26,7 +27,7 @@ configs = {
         "--hardware-window": 20,
         "--latency-window": 10,
         "--bandwidth-window": 5,
-        "-t": 5,
+        "-t": 20,
     },
     "reactive": {   
         "--time-report": 15,
@@ -42,7 +43,7 @@ configs = {
         "--hardware-window": 10,
         "--latency-window": 5,
         "--bandwidth-window": 3,
-        "-t": 5,
+        "-t": 40,
     }
 }
 
@@ -103,17 +104,16 @@ class Experimenter:
         self.sessions.append({"num": num, "name": name, "session": session, "moments": [],"version": 1})
         self.clear_session(session)
         print("session",self.sessions[-1])
-        with open("sessions.json","w") as wr:
+        with open("../sessions.json","w") as wr:
             json.dump(self.sessions, wr)
 
     def start_moment(self, name):
-        self.stop_monitor()
         spec = self.spec.spec
         r = self.connect("POST",f"http://131.114.72.76:8248/testbed/{self.sessions[-1]['session']}",201, json=spec)
         moment = r.json()["moment"]
         self.sessions[-1]["moments"].append({"moment": moment, "name": name})
         print("session",self.sessions[-1]["moments"][-1])
-        with open("sessions.json","w") as wr:
+        with open("../sessions.json","w") as wr:
             json.dump(self.sessions, wr)
         self.start_monitor()
     
@@ -131,8 +131,11 @@ class Experimenter:
         for node in nodes:
             bmon = node+"-bmon.txt"
             psrecord = node+"-cpu.txt"
-            files[bmon] = open(bmon,'rb')
-            files[psrecord] = open(psrecord,'rb')
+            try:
+                files[bmon] = open(bmon,'rb')
+                files[psrecord] = open(psrecord,'rb')
+            except:
+                pass
         print("sending monitored data")
         r = self.connect("POST",f"http://131.114.72.76:8248/testbed/{self.sessions[-1]['session']}/footprint",201, json=spec,files=files)
 
@@ -167,7 +170,7 @@ class Experimenter:
         spec = self.spec.spec
         nodes = [k for k in spec["nodes"]]
         self.testbed_try(self.testbed.stop,nodes=nodes)
-        with open("sessions.json","w") as wr:
+        with open("../sessions.json","w") as wr:
             json.dump(self.sessions, wr)
 
     def get_roles(self):
@@ -193,7 +196,7 @@ class Experimenter:
             except:
                 pass
             time_delta = datetime.now() - start_time
-            if time_delta.total_seconds() >= 60*40:
+            if time_delta.total_seconds() >= 60*60:
                 break
         print(f"stable: {stable}", flush=True)
         if not stable:
@@ -203,6 +206,8 @@ class Experimenter:
     def kill_nodes(self, leaders, followers, moment = True):
         # leaders: number of leaders to kill
         # followers: number of followers to kill
+        if moment:
+            self.stop_monitor()
         nodes = []
         nodes += random.sample(self.leaders,leaders)
         nodes += random.sample(list(self.followers),followers)
@@ -214,6 +219,8 @@ class Experimenter:
         return nodes
 
     def restart_nodes(self, nodes, conf, moment = True):
+        if moment:
+            self.stop_monitor()
         self.removed = [v for v in self.removed if v not in nodes]
         self.spec = Spec(topology=self.used_topology)
         self.spec.remove_nodes(self.removed)
@@ -224,6 +231,8 @@ class Experimenter:
         self.testbed_try(self.testbed.start,followers = nodes, leader=self.leaders[0], params=params,only_followers=True)
 
     def change_links(self, percentage, B, L, moment = True):
+        if moment:
+            self.stop_monitor()
         self.used_topology.modify_links(percentage, B, L)
         self.spec = Spec(topology=self.used_topology)
         self.spec.remove_nodes(self.removed)
@@ -233,6 +242,8 @@ class Experimenter:
         self.testbed_try(self.testbed.set_links,spec=spec)
 
     def restore_links(self, moment = True):
+        if moment:
+            self.stop_monitor()
         self.used_topology = copy.deepcopy(self.base_topology)
         self.spec = Spec(topology=self.used_topology)
         self.spec.remove_nodes(self.removed)
@@ -242,6 +253,8 @@ class Experimenter:
         self.testbed_try(self.testbed.set_links,spec=spec)
 
     def isolate_group(self, boh, moment = True):
+        if moment:
+            self.stop_monitor()
         pass
         if moment:
             self.start_moment(f"isolate group")
@@ -259,46 +272,58 @@ class Experimenter:
         followers = len(self.followers)//4
         els = self.kill_nodes(leaders=leaders,followers=followers)
         self.wait_stability()
-        self.restart_nodes(els, conf)
-        self.wait_stability()
+        # self.restart_nodes(els, conf)
+        # self.wait_stability()
 
+        self.stop_fogmon()
+
+        self.start_session("base and nodes")
+
+        self.start_fogmon(conf)
+        self.wait_stability()
+        
         leaders = len(self.leaders)-1
         followers = len(self.followers)//2
         els = self.kill_nodes(leaders=leaders,followers=followers)
         self.wait_stability()
-        self.restart_nodes(els, conf)
+        self.stop_fogmon()
+
+        # self.restart_nodes(els, conf)
+        # self.wait_stability()
+
+        self.start_session("base and nodes")
+
+        self.start_fogmon(conf)
         self.wait_stability()
 
         leaders = len(self.leaders)-1
         els = self.kill_nodes(leaders=leaders,followers=0)
         self.wait_stability()
-        self.restart_nodes(els, conf)
-        self.wait_stability()
 
         self.stop_fogmon()
         
         
-        self.start_session("links")
+        # self.start_session("links")
 
-        self.start_fogmon(conf)
-        self.wait_stability()
+        # self.start_fogmon(conf)
+        # self.wait_stability()
 
-        self.change_links(5,100,500)
-        self.wait_stability()
-        self.restore_links()
-        self.wait_stability()
+        # self.change_links(5,100,500)
+        # self.wait_stability()
+        # self.restore_links()
+        # self.wait_stability()
 
-        self.change_links(10,100,500)
-        self.wait_stability()
-        self.restore_links()
-        self.wait_stability()
+        # self.change_links(10,100,500)
+        # self.wait_stability()
+        # self.restore_links()
+        # self.wait_stability()
 
         # links = self.isolate_group(1)
         # self.wait_stability()
         # self.restore_links(links)
         # self.wait_stability()
 
-        self.stop_fogmon()
+        # self.stop_fogmon()
 
 if __name__ == "__main__":
     import sys
@@ -317,7 +342,8 @@ if __name__ == "__main__":
             # Extract all the contents of zip file in build directory
             zipObj.extractall("build")
         os.system("chmod 600 build/id_rsa")
-    elif sys.argv[2] in  ["setup", "network","pull", "start", "stop", "test"]:
+    elif sys.argv[2] in  ["setup", "network","pull", "start", "start2", "stop", "test"]:
+        os.system("chmod 600 build/id_rsa")
         #path = input("insert topology file path [e.g. ./topology]\nAlso make sure that topology file is the same used to generate the spec.xml for the build path loaded: ")
         topology = Topology.load(sys.argv[1])
         exp = Experimenter(topology)
@@ -329,14 +355,16 @@ if __name__ == "__main__":
             exp.pull()
         elif sys.argv[2] == "start":
             exp.start_experiment(configs["default"])
+        elif sys.argv[2] == "start2":
+            with open("../sessions.json","r") as rd:
+                exp.sessions = json.load(rd)
+            exp.start_experiment(configs["default"])
         elif sys.argv[2] == "stop":
-            with open("sessions.json","r") as rd:
+            with open("../sessions.json","r") as rd:
                 exp.sessions = json.load(rd)
             exp.spec = Spec(topology=exp.base_topology)
             exp.stop_fogmon()
         elif sys.argv[2] == "test":
-            with open("sessions.json","r") as rd:
-                exp.sessions = json.load(rd)
-            exp.spec = Spec(topology=exp.base_topology)
-            exp.stop_monitor()
+            followers = ["node2","node13","node16"]
+
 

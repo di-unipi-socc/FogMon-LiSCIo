@@ -40,6 +40,12 @@ protected:
     virtual Message::leader_update selection(int id, int formula = 0);
     virtual void startSelection();
 
+    //return true if the selection is old
+    //return false else
+    virtual bool checkOld();
+
+    std::chrono::_V2::system_clock::time_point last;
+
     std::vector<Message::leader_update> updates;
 
     std::thread selectionThread;
