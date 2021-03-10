@@ -9,6 +9,27 @@
 
 using namespace std;
 
+#include <stdio.h>
+#include <execinfo.h>
+#include <signal.h>
+#include <stdlib.h>
+#include <unistd.h>
+
+
+void handler(int sig) {
+  void *array[10];
+  size_t size;
+
+  // get void*'s for all entries on the stack
+  size = backtrace(array, 10);
+
+  // print out all the frames to stderr
+  fprintf(stderr, "Error: signal %d:\n", sig);
+  backtrace_symbols_fd(array, size, STDERR_FILENO);
+  fflush(stderr);
+  exit(1);
+}
+
 //sudo docker run -it --net=host server -C 54.93.78.224
 //sudo docker run -it --net=host node -C 54.93.78.224
 
@@ -24,6 +45,8 @@ using namespace std;
 int main(int argc, char *argv[]) {
     cout << argv[1] << endl;
     InputParser input(argc,argv);
+
+    signal(SIGSEGV, handler);   // install our handler
 
     if(input.cmdOptionExists("-h") || input.cmdOptionExists("--help")) {
         cout << "Usage: ./program [OPTIONS]..." << endl<<endl;

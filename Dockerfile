@@ -15,7 +15,7 @@ RUN cp $(ls ./Bin/*/*) /
 ADD . /compile
 WORKDIR /compile
 
-RUN cmake .
+RUN cmake . -DCMAKE_BUILD_TYPE=Debug
 RUN make
 RUN cp ./FogMon /
 RUN cp ./libsqlitefunctions.so /

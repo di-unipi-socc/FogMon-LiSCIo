@@ -27,7 +27,7 @@ configs = {
         "--hardware-window": 20,
         "--latency-window": 10,
         "--bandwidth-window": 5,
-        "-t": 20,
+        "-t": 60,
     },
     "reactive": {   
         "--time-report": 15,
@@ -43,7 +43,7 @@ configs = {
         "--hardware-window": 10,
         "--latency-window": 5,
         "--bandwidth-window": 3,
-        "-t": 40,
+        "-t": 60,
     }
 }
 
@@ -83,7 +83,10 @@ class Experimenter:
             except KeyboardInterrupt:
                 raise
             except:
+                import traceback
+                traceback.print_exc()
                 pass
+            print("retry")
             sleep(time)
         raise Exception("Testbed connection error")
 
@@ -153,6 +156,7 @@ class Experimenter:
 
     def pull(self):
         spec = Spec(topology=self.base_topology).spec
+        self.testbed_try(self.testbed.clean,nodes=[k for k in spec["nodes"]])
         self.testbed_try(self.testbed.pull,spec=spec)
 
     def start_fogmon(self, conf):
@@ -268,14 +272,14 @@ class Experimenter:
         self.wait_stability()
 
         leaders = len(self.leaders)
-        leaders = 2 if leaders < 25 else 3 if leaders < 35 else 4
+        leaders = 2 #if leaders < 25 else 3 if leaders < 35 else 4
         followers = len(self.followers)//4
         els = self.kill_nodes(leaders=leaders,followers=followers)
         self.wait_stability()
+        self.stop_fogmon()
+
         # self.restart_nodes(els, conf)
         # self.wait_stability()
-
-        self.stop_fogmon()
 
         self.start_session("base and nodes")
 
@@ -299,9 +303,7 @@ class Experimenter:
         leaders = len(self.leaders)-1
         els = self.kill_nodes(leaders=leaders,followers=0)
         self.wait_stability()
-
         self.stop_fogmon()
-        
         
         # self.start_session("links")
 
@@ -324,6 +326,16 @@ class Experimenter:
         # self.wait_stability()
 
         # self.stop_fogmon()
+
+    def test(self, conf):
+        self.start_session("base and nodes")
+
+        self.start_fogmon(conf)
+        self.wait_stability()
+
+        self.start_moment("No change (just fooprint")
+        self.wait_stability()
+        self.stop_fogmon()
 
 if __name__ == "__main__":
     import sys
@@ -365,6 +377,9 @@ if __name__ == "__main__":
             exp.spec = Spec(topology=exp.base_topology)
             exp.stop_fogmon()
         elif sys.argv[2] == "test":
-            followers = ["node2","node13","node16"]
+            with open("../sessions.json","r") as rd:
+                exp.sessions = json.load(rd)
+            exp.test(configs["default"])
+            
 
 

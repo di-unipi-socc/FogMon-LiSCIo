@@ -1,9 +1,14 @@
 from fabric import Connection, Config
-from fabric import task, SerialGroup, ThreadingGroup
+from fabric import task, SerialGroup, ThreadingGroup, runners
+from fabric.exceptions import GroupException
 from time import sleep
 from enum import Enum
 import threading
 import os
+
+import logging
+logging.basicConfig()
+logging.getLogger().setLevel(logging.FATAL)
 
 class TestBeds(str, Enum):
     WALL1 = "urn:publicid:IDN+wall1.ilabt.iminds.be+authority+cm"
@@ -55,25 +60,48 @@ class Testbed:
             overrides={
                 'ssh_config_path': f"./{path}/ssh-config",
                 'load_ssh_configs': True,
+                "run": {
+                    "quiet": True,
+                }
             }
         )
+        
         os.chdir(path)
 
     def exec_script(self, name, lines, nodes):
-        conns = ThreadingGroup(*nodes,
-            config = self.config)
-        file = f"/tmp/script-{name}.sh"
-        conns.run(f"> {file}", hide=True)
-        conns.run(f"chmod +x {file}", hide=True)
-        script = ""
-        for line in lines:
-            script += f"{line}\n"
+        for i in range(10):
+            try:
+                for i in range(10):
+                    try:
+                        if len(nodes) == 1:
+                            conns = Connection(*nodes,
+                            config = self.config)
+                        else:
+                            conns = ThreadingGroup(*nodes,
+                                config = self.config)
+                    except:
+                        pass
+                    sleep(1)
+                file = f"/tmp/script-{name}.sh"
+                conns.run(f"> {file}", hide=True)
+                conns.run(f"chmod +x {file}", hide=True)
+                script = ""
+                for line in lines:
+                    script += f"{line}\n"
 
-        script = script.replace("\\","\\\\")
-        script = script.replace("'","\\'")
-        
-        conns.run(f'echo $\'{script}\' > {file}', hide=True)
-        conns.run(f"screen -d -m -S {name} bash -c '{file}'", hide=True)
+                script = script.replace("\\","\\\\")
+                script = script.replace("'","\\'")
+                
+                conns.run(f'sudo echo $\'{script}\' > {file}', hide=True)
+                conns.run(f"screen -d -m -S {name} bash -c '{file}'", hide=True)
+                break
+            except GroupException as e:
+                nodes = []
+                for c, r in e.result.items():
+                    if not isinstance(r,runners.Result) :
+                        nodes.append(c.original_host)
+                print(nodes)
+            sleep(10)
 
     def exec_scripts(self, name, scripts: dict):
         print(name)
@@ -126,16 +154,24 @@ class Testbed:
     def getIpv6s(self, spec):
         # resolve ips
         nodes = [node for node in spec["nodes"]]
-        conns = ThreadingGroup(*nodes,
-            config = self.config)
-        
-        results = conns.run("hostname -I", hide=True)
-        for r in results:
+        for i in range(10):
             try:
-                ipv6 = results[r].stdout.split(" ")[-2]
-                spec["nodes"][r.original_host]["ipv6"] = ipv6
-            except:
-                exit(1)
+                conns = ThreadingGroup(*nodes,
+                    config = self.config)
+                
+                results = conns.run("hostname -I", hide=True)
+                for r in results:
+                    ipv6 = results[r].stdout.split(" ")[-2]
+                    spec["nodes"][r.original_host]["ipv6"] = ipv6
+                break
+            except GroupException as e:
+                nodes = []
+                for c, r in e.result.items():
+                    if not isinstance(r,runners.Result) :
+                        nodes.append(c.original_host)
+                print(nodes)
+                pass
+            sleep(10)
 
     def generate_init_network_scripts(self, spec):
         scripts = {}
@@ -170,6 +206,9 @@ class Testbed:
         scripts = {}
         for node in spec["nodes"]:
             comms = []
+            if spec["nodes"][node]["testbed"] != TestBeds.CITY.value:
+                for comm in enable_nat:
+                    comms.append(comm)
             for l,v in spec["links"].items():
                 n1 = v["interfaces"][0].split(":")[0]
                 n2 = v["interfaces"][1].split(":")[0]
@@ -197,7 +236,9 @@ class Testbed:
                         command = f"sudo tc qdisc add dev {grename} root netem "
                         if "latency" in v:
                             latency = v["latency"]
-                            if not v["same_testbed"]:
+                            if not v["same_testbed"] and spec["nodes"][node]["testbed"] != TestBeds.CITY.value and spec["nodes"][othername]["testbed"] != TestBeds.CITY.value:
+                                latency -=0
+                            elif not v["same_testbed"]:
                                 latency -=4
                             elif v["testbed"] == TestBeds.CITY.value:
                                 latency -=3
@@ -215,27 +256,31 @@ class Testbed:
 
     def setup(self, spec):
         nodes = [node for node in spec["nodes"]]
-        # setup network
-        scripts = self.generate_init_network_scripts(spec)
-        self.exec_scripts("network-init",scripts)
-        self.wait_script("network-init", nodes)
+        # # setup network
+        # scripts = self.generate_init_network_scripts(spec)
+        # self.exec_scripts("network-init",scripts)
+        # self.wait_script("network-init", nodes)
 
         scripts = self.generate_network_scripts(spec)
         self.exec_scripts("network",scripts)
         self.wait_script("network", nodes)
 
-        # setup docker
-        self.exec_script("docker", docker_script, nodes)
-        self.wait_script("docker", nodes,timeout=20)
+        # # setup docker
+        # self.exec_script("docker", docker_script, nodes)
+        # self.wait_script("docker", nodes,timeout=20)
 
-        # pull fogmon
-        self.exec_script("pull", [f"sudo docker pull {fogmon_images[0]}"], nodes)
-        self.wait_script("pull", nodes)
+        # # pull fogmon
+        # self.exec_script("pull", [f"sudo docker pull {fogmon_images[0]}"], nodes)
+        # self.wait_script("pull", nodes)
 
     def pull(self, spec):
         nodes = [node for node in spec["nodes"]]
         self.exec_script("pull", [f"sudo docker pull {fogmon_images[0]}"], nodes)
         self.wait_script("pull", nodes)
+
+    def clean(self, nodes):
+        self.exec_script("clean", ["sudo pkill -9 -f emulab-networkd.sh ; echo $?","sudo truncate -s 0 /var/log/syslog","sudo rm /var/log/syslog.*"], nodes)
+        self.wait_script("clean", nodes)
 
     def start(self, followers, leader, params, image=fogmon_images[0], only_followers = False):
         conn = Connection(leader, config=self.config)

@@ -93,8 +93,19 @@ void Follower::start(vector<Message::node> mNodes) {
 
     this->getHardware();
 
-    if(!selectServer(mNodes)) {
-        fprintf(stderr,"Cannot connect to the main node\n");
+    bool connected = false;
+    for(int i=0; i<10; i++){
+        if(!selectServer(mNodes)) {
+            fprintf(stderr,"Cannot connect to the main node...\n");
+            continue;
+        }
+        connected = true;
+        break;
+    }
+
+    if(!connected) {
+        fprintf(stderr,"Cannot connect to the main node closing\n");
+        sleep(10);
         this->stop();
         exit(1);
     }

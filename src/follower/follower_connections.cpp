@@ -109,6 +109,20 @@ void FollowerConnections::handler(int fd, Message &m) {
                     
                 }
             }
+        }else if(m.getArgument() == Message::Argument::MNODES) {
+            if(m.getCommand() == Message::Command::GET) {
+                //build array of nodes
+                vector<Message::node> nodes = this->parent->node->getMNodes();
+                //send nodes
+                Message res;
+                res.setType(Message::Type::RESPONSE);
+                res.setCommand(Message::Command::MNODELIST);
+                res.setArgument(Message::Argument::POSITIVE);
+
+                res.setData(nodes);
+            
+                sendMessage(fd, res);
+            }
         }else if(m.getArgument() == Message::Argument::REPORT) {
             if(m.getCommand() == Message::Command::GET) {
                 //build report

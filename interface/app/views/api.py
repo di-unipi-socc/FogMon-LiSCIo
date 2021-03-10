@@ -74,9 +74,8 @@ def get_footprint(session):
 
     return jsonify(
         status=True,
-        message='Saved successfully!',
-        data=data
-    ), 201
+        data=data,
+    )
 
 @api.route('/testbed/<int:session>/footprint', methods=['POST'])
 def post_footprint(session):

@@ -126,12 +126,12 @@ class Spec:
       for i in selected:
          latencies = [M[0][i][j] for j in selected]
          uploads = [M[1][i][j] for j in selected]
-         if m < len(selected)/2:
+         if m < 30:
             testbed = TestBeds.WALL1 # TODO: decide testbed
          else:
-            testbed = TestBeds.WALL1
+            testbed = TestBeds.WALL2
          matrix.append((latencies,uploads,testbed))
-
+         m+=1
       # this take the matrix and create the nodes
       for row in matrix:
          self.create_nodes(1, row[2])

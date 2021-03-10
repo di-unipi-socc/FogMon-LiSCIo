@@ -250,19 +250,18 @@ void Leader::changeRole(vector<Message::node> leaders) {
     }
     printf("A\n");
     fflush(stdout);
-    this->storage->removeChangeRole(leaders);
-    printf("B\n");
-    fflush(stdout);
     if(!present) {
+        printf("B\n");
+        fflush(stdout);
+        this->iter = 1; 
+        this->node->setMNodes(leaders);
         printf("C\n");
         fflush(stdout);
-        this->node->setMNodes(leaders);
-        printf("D\n");
-        fflush(stdout);
         this->node->demote();
+    }else {
+        this->storage->removeChangeRole(leaders);
         printf("E\n");
         fflush(stdout);
-    }else {
         this->iter = 1;       
         sleeper.sleepFor(chrono::seconds(10));
         printf("F\n");
