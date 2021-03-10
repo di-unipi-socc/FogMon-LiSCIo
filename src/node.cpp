@@ -193,5 +193,6 @@ bool Node::setParam(std::string name, int value) {
         this->session = value;
     }else
         return this->agent->setParam(name,value);
+    cout << "setting: "<<name << " = "<< value << endl;
     return true;
 }

@@ -180,7 +180,7 @@ class Topology:
 if __name__ == "__main__":
     import sys
     from clusterer import Clusterer
-    for seed in range(120,1000):
+    for seed in range(700,1000):
         random.seed(seed)
         if seed % 50 ==0:
             print(f"{seed}\r", flush=True, end="")
@@ -227,7 +227,7 @@ if __name__ == "__main__":
         for c in data["clusters"]:
             if dim > len(c):
                 dim = len(c)
-        if ((dim > math.sqrt(len(selected))/2 +1 and num <= 40) or (dim > math.sqrt(len(selected))/2 and num > 40)) and data["quality"] < 0.5:
+        if ((dim > math.sqrt(len(selected))/2 +1 and num <= 40) or (dim > math.sqrt(len(selected))/2 and num > 40)) and data["quality"] < 1:
             break
     print(len(selected))
     N1 = 4
