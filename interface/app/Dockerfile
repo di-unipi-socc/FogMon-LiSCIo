@@ -21,4 +21,4 @@ USER www
 EXPOSE 5000
 
 
-CMD [ "gunicorn", "-w", "4", "--timeout", "300", "--bind", "0.0.0.0:5000", "wsgi"]
+CMD [ "gunicorn", "-w", "10", "--timeout", "600", "--bind", "0.0.0.0:5000", "wsgi"]

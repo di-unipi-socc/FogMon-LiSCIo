@@ -81,6 +81,11 @@ def get_reports(session, ids=None, begin=None, end=None, limit=0):
     return clean_results(cursor)
 
 def get_lastreports(session):
+    # import datetime
+    # date1 = datetime.datetime.strptime("2021-03-10 16:09:20.918000", '%Y-%m-%d %H:%M:%S.%f')
+    # date2 = datetime.datetime.strptime("2021-03-10 16:16:52.135000", '%Y-%m-%d %H:%M:%S.%f')
+    
+    # mongo.db.reports.remove({"session": session,"datetime": {"$lt": date2, "$gt": date1}})
     cursor = mongo.db.update.find({"session": session}).sort([("datetime", 1)])
     updates = list(cursor)
     date = updates[0]["datetime"]

@@ -1,3 +1,5 @@
+from inspect import CO_NESTED
+import traceback
 from fabric import Connection, Config
 from fabric import task, SerialGroup, ThreadingGroup, runners
 from fabric.exceptions import GroupException
@@ -45,6 +47,8 @@ docker_script = [
 ]
 
 monitor_script = [
+    "echo '' > test.log",
+    "echo '' > bmon.log",
     "bmon -r 1 -o format:fmt='$(element:name) $(attr:rxrate:bytes) $(attr:txrate:bytes)\\n' -p $(ip route | grep default | sed -e 's/^.*dev.//' -e 's/.proto.*//') > bmon.log &",
     "P1=$!",
     "sudo docker stats --format '{{.Container}}\\t{{.CPUPerc}}\\t{{.MemUsage}}' > test.log &",
@@ -55,7 +59,7 @@ monitor_script = [
 
 class Testbed:
 
-    def __init__(self, path = "build"):
+    def __init__(self, spec, path = "build"):
         self.config = Config(
             overrides={
                 'ssh_config_path': f"./{path}/ssh-config",
@@ -65,26 +69,30 @@ class Testbed:
                 }
             }
         )
-        
+        self.conns = {node:Connection(node, config = self.config) for node in spec["nodes"]}
         os.chdir(path)
 
-    def exec_script(self, name, lines, nodes):
-        for i in range(10):
+    def cleanup(self):
+        try:
+            for node,conn in self.conns.items():
+                print(f"\rclosing {node}", end="")
+                conn.close()
+            print()
+        except:
+            pass
+        
+
+    def exec_script_(self, name, lines, node, no_script=False):        
+        for _ in range(20):
+            conn = self.conns[node]
             try:
-                for i in range(10):
-                    try:
-                        if len(nodes) == 1:
-                            conns = Connection(*nodes,
-                            config = self.config)
-                        else:
-                            conns = ThreadingGroup(*nodes,
-                                config = self.config)
-                    except:
-                        pass
-                    sleep(1)
+                if no_script:
+                    for line in lines:
+                        conn.run(line,hide=True)
+                    return
                 file = f"/tmp/script-{name}.sh"
-                conns.run(f"> {file}", hide=True)
-                conns.run(f"chmod +x {file}", hide=True)
+                conn.run(f"> {file}", hide=True)
+                conn.run(f"chmod +x {file}", hide=True)
                 script = ""
                 for line in lines:
                     script += f"{line}\n"
@@ -92,33 +100,34 @@ class Testbed:
                 script = script.replace("\\","\\\\")
                 script = script.replace("'","\\'")
                 
-                conns.run(f'sudo echo $\'{script}\' > {file}', hide=True)
-                conns.run(f"screen -d -m -S {name} bash -c '{file}'", hide=True)
-                break
-            except GroupException as e:
-                nodes = []
-                for c, r in e.result.items():
-                    if not isinstance(r,runners.Result) :
-                        nodes.append(c.original_host)
-                print(nodes)
-            sleep(10)
+                conn.run(f'sudo echo $\'{script}\' > {file}', hide=True)
+                conn.run(f"screen -d -m -S {name} bash -c 'sudo {file}'")
+                return
+            except:
+                pass
+            sleep(1)
+        print(f"bad {node}")
 
-    def exec_scripts(self, name, scripts: dict):
-        print(name)
+    def exec_scripts(self, name, scripts: dict, no_script=False):
+        print(f"exec {name}")
         threads = []
         for node in scripts:
-            x = threading.Thread(target=self.exec_script, args=(name,scripts[node], [node]))
-            threads.append(x)
-        for thread in threads:
+            thread = threading.Thread(target=self.exec_script_, args=(name,scripts[node], node),kwargs={"no_script":no_script})
+            threads.append((thread,node))
+        for (thread,node) in threads:
             thread.start()
-        for thread in threads:
+        for (thread,node) in threads:
+            print(f"join {node}\r", end="")
             thread.join()
+
+    def exec_script(self, name, lines, nodes, no_script=False):
+        scripts = {node:lines for node in nodes}
+        self.exec_scripts(name,scripts,no_script)
 
     def get_file(self, node, src_name, dst_name):
         for i in range(10):
+            conn = self.conns[node]
             try:
-                conn = Connection(node,
-                config = self.config)
                 conn.get(src_name, dst_name)
                 print(src_name)
                 return
@@ -136,20 +145,40 @@ class Testbed:
         for thread in threads:
             thread.join()
 
-    def wait_script(self, name, nodes, retry = 0, timeout = 1):
-        conns = ThreadingGroup(*nodes,
-            config = self.config)
-        i = 0
-        while True:
-            results = conns.run(f"screen -S {name} -Q select . > /dev/null 2>&1 ; echo $?", hide=True)
-            if len([r for r in results if int(results[r].stdout) != 1]) == 0:
-                break
-            print(f"waiting {name}:",len([r.original_host for r in results if int(results[r].stdout) != 1]),"\r",end="")
-            sleep(timeout)
-            if i>retry and retry != 0 :
-                return False
-            i += 1
-        return True
+    def wait_script_(self, name, command, node, retry = 0, timeout = 1):
+        for i in range(10):
+            conn = self.conns[node]
+            try:
+                i = 0
+                while True:
+                    result = conn.run(command, hide=True)
+                    if int(result.stdout) == 1:
+                        break
+                    sleep(timeout)
+                    if i>retry and retry != 0 :
+                        return False
+                    i += 1
+                return True
+            except:
+                pass
+        print("waiting failed!!!!!!!!!!")
+        return False
+
+    def wait_script(self, name, nodes, retry = 0, timeout = 1, condition = None):
+        print(f"wait {name}")
+        threads = []
+        command = condition if condition is not None else f"screen -S {name} -Q select . > /dev/null 2>&1 ; echo $?"
+        sleep(1)
+        print(command)
+        for node in nodes:
+            x = threading.Thread(target=self.wait_script_, args=(name,command, node,retry,timeout))
+            threads.append((x,node))
+        for (thread,node) in threads:
+            thread.start()
+        for (thread,node) in threads:
+            print(f"join {node}\r", end="")
+            thread.join()
+        print()
 
     def getIpv6s(self, spec):
         # resolve ips
@@ -170,7 +199,6 @@ class Testbed:
                     if not isinstance(r,runners.Result) :
                         nodes.append(c.original_host)
                 print(nodes)
-                pass
             sleep(10)
 
     def generate_init_network_scripts(self, spec):
@@ -256,66 +284,46 @@ class Testbed:
 
     def setup(self, spec):
         nodes = [node for node in spec["nodes"]]
-        # # setup network
-        # scripts = self.generate_init_network_scripts(spec)
-        # self.exec_scripts("network-init",scripts)
-        # self.wait_script("network-init", nodes)
+        # setup network
+        scripts = self.generate_init_network_scripts(spec)
+        self.exec_scripts("network-init",scripts)
+        self.wait_script("network-init", nodes)
 
         scripts = self.generate_network_scripts(spec)
         self.exec_scripts("network",scripts)
         self.wait_script("network", nodes)
 
-        # # setup docker
-        # self.exec_script("docker", docker_script, nodes)
-        # self.wait_script("docker", nodes,timeout=20)
+        # setup docker
+        self.exec_script("docker", docker_script, nodes)
+        self.wait_script("docker", nodes,timeout=20)
 
-        # # pull fogmon
-        # self.exec_script("pull", [f"sudo docker pull {fogmon_images[0]}"], nodes)
-        # self.wait_script("pull", nodes)
+        # pull fogmon and clean
+        self.pull(spec)
+        self.clean(nodes)
 
     def pull(self, spec):
         nodes = [node for node in spec["nodes"]]
         self.exec_script("pull", [f"sudo docker pull {fogmon_images[0]}"], nodes)
-        self.wait_script("pull", nodes)
+        self.wait_script("pull", nodes,timeout=5)
 
     def clean(self, nodes):
-        self.exec_script("clean", ["sudo pkill -9 -f emulab-networkd.sh ; echo $?","sudo truncate -s 0 /var/log/syslog","sudo rm /var/log/syslog.*"], nodes)
+        self.exec_script("clean", ["sudo docker kill $(sudo docker ps -q)","sudo pkill -9 -f emulab-networkd.sh ; echo $?","sudo truncate -s 0 /var/log/syslog","sudo rm /var/log/syslog.*", "sudo killall screen ; echo $?"], nodes)
         self.wait_script("clean", nodes)
 
     def start(self, followers, leader, params, image=fogmon_images[0], only_followers = False):
-        conn = Connection(leader, config=self.config)
-        conns = ThreadingGroup(*followers,
-            config = self.config)
-
+        scripts = {node:[f"sudo docker run -it --net=host {image} -C {leader} {params} | tee log.txt"] for node in followers}
         if not only_followers:
-            conn.run(f"screen -d -m -S fogmon bash -c 'sudo docker run -it --net=host {image} --leader {params} | tee log.txt'")
-        conns.run(f"screen -d -m -S fogmon bash -c 'sudo docker run -it --net=host {image} -C {leader} {params} | tee log.txt'")
+            scripts[leader] = [f"sudo docker run -it --net=host {image} --leader {params} | tee log.txt"]
+        self.exec_scripts("fogmon", scripts)
+
 
     def stop(self, nodes):
-        conns = ThreadingGroup(*nodes,
-            config = self.config)
-        conns.run("screen -S fogmon -X stuff '0'`echo -ne '\015'` | sudo docker ps")
-        for i in range(30):
-            results = conns.run("screen -S fogmon -Q select . > /dev/null 2>&1 ; echo $?", hide=True)
-            if len([r for r in results if int(results[r].stdout) != 1]) == 0:
-                return True
-            print("Retry...",end=" ",flush=True)
-            sleep(3)
-        print("Not terminated")
-        return False
+        self.exec_script("stop", [f"screen -S fogmon -X stuff '0'`echo -ne '\015'` | sudo docker ps"], nodes, no_script=True)
+        return self.wait_script("stop", nodes, condition="screen -S fogmon -Q select . > /dev/null 2>&1 ; echo $?")
 
     def kill(self, nodes):
-        conns = ThreadingGroup(*nodes,
-            config = self.config)
-        conns.run("sudo docker kill $(docker ps -q) | sudo docker ps")
-        for i in range(30):
-            results = conns.run("screen -S fogmon -Q select . > /dev/null 2>&1 ; echo $?", hide=True)
-            if len([r for r in results if int(results[r].stdout) != 1]) == 0:
-                return True
-            print("Retry...",end=" ",flush=True)
-            sleep(1)
-        print("Not terminated")
-        return False
+        self.exec_script("kill", ["sudo docker kill $(docker ps -q) | sudo docker ps"], nodes)
+        return self.wait_script("stop", nodes, condition="screen -S fogmon -Q select . > /dev/null 2>&1 ; echo $?")
 
     def set_links(self, spec):
         nodes = [node for node in spec["nodes"]]
@@ -332,15 +340,9 @@ class Testbed:
         self.get_files(nodes, "bmon.log", "bmon.txt")
 
     def stop_monitor(self, nodes):
-        conns = ThreadingGroup(*nodes,
-            config = self.config)
-        conns.run("screen -S monitor -X stuff '0'`echo -ne $'\cc'` | screen -list | ps ax | grep 'bmon'")
-        for i in range(30):
-            results = conns.run("screen -S monitor -Q select . > /dev/null 2>&1 ; echo $?", hide=True)
-            if len([r for r in results if int(results[r].stdout) != 1]) == 0:
-                return True
-            print("Retry...",end=" ",flush=True)
-            sleep(1)
-        print("Not terminated")
-        return False
+        self.exec_script("monitor-stop", ["screen -S monitor -X stuff '0'`echo -ne $'\cc'` | screen -list | ps ax | grep 'bmon'"], nodes, no_script=True)
+        print("monitor-stop")
+        a =  self.wait_script("monitor-stop", nodes, condition="screen -S monitor -Q select . > /dev/null 2>&1 ; echo $?")
+        print("monitor-stopped")
+        return a
         

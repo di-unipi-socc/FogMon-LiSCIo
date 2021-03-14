@@ -27,7 +27,7 @@ configs = {
         "--hardware-window": 20,
         "--latency-window": 10,
         "--bandwidth-window": 5,
-        "-t": 60,
+        "-t": 5,
     },
     "reactive": {   
         "--time-report": 15,
@@ -43,7 +43,7 @@ configs = {
         "--hardware-window": 10,
         "--latency-window": 5,
         "--bandwidth-window": 3,
-        "-t": 60,
+        "-t": 5,
     }
 }
 
@@ -54,7 +54,14 @@ class Experimenter:
         self.used_topology = copy.deepcopy(base_topology)
         self.removed = []
         self.num = len(self.base_topology.selected)
-        self.testbed = Testbed("build")
+        self.spec = Spec(topology=self.used_topology)
+        self.testbed = Testbed(self.spec.spec, "build")
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        self.testbed.cleanup()
 
     def connect(self, method, url, expected_status, tries=30, time=3, **params):
         for i in range(tries):
@@ -222,7 +229,7 @@ class Experimenter:
             self.start_moment(f"kill {leaders} {followers}, {nodes}")
         return nodes
 
-    def restart_nodes(self, nodes, conf, moment = True):
+    def restart_nodes(self, nodes, conf, moment = True, apply = True):
         if moment:
             self.stop_monitor()
         self.removed = [v for v in self.removed if v not in nodes]
@@ -230,9 +237,9 @@ class Experimenter:
         self.spec.remove_nodes(self.removed)
         if moment:
             self.start_moment(f"restart, {nodes}")
-
-        params = self.build_params(conf)
-        self.testbed_try(self.testbed.start,followers = nodes, leader=self.leaders[0], params=params,only_followers=True)
+        if apply:
+            params = self.build_params(conf)
+            self.testbed_try(self.testbed.start,followers = nodes, leader=self.leaders[0], params=params,only_followers=True)
 
     def change_links(self, percentage, B, L, moment = True):
         if moment:
@@ -245,7 +252,7 @@ class Experimenter:
         spec = self.spec.spec
         self.testbed_try(self.testbed.set_links,spec=spec)
 
-    def restore_links(self, moment = True):
+    def restore_links(self, moment = True, apply = True):
         if moment:
             self.stop_monitor()
         self.used_topology = copy.deepcopy(self.base_topology)
@@ -253,8 +260,9 @@ class Experimenter:
         self.spec.remove_nodes(self.removed)
         if moment:
             self.start_moment(f"restore links")
-        spec = self.spec.spec
-        self.testbed_try(self.testbed.set_links,spec=spec)
+        if apply:
+            spec = self.spec.spec
+            self.testbed_try(self.testbed.set_links,spec=spec)
 
     def isolate_group(self, boh, moment = True):
         if moment:
@@ -265,8 +273,8 @@ class Experimenter:
         # use cluster to break links in topology near cluster
         # apply links
 
-    def start_experiment(self, conf):
-        self.start_session("base and nodes")
+    def start_experiment(self, conf, name):
+        self.start_session(f"base and nodes {name}")
 
         self.start_fogmon(conf)
         self.wait_stability()
@@ -277,25 +285,23 @@ class Experimenter:
         els = self.kill_nodes(leaders=leaders,followers=followers)
         self.wait_stability()
         self.stop_fogmon()
+        self.removed = []
 
-        # self.restart_nodes(els, conf)
-        # self.wait_stability()
 
-        self.start_session("base and nodes")
-
+        self.start_session(f"base and nodes {name}")
+        
         self.start_fogmon(conf)
         self.wait_stability()
-        
+
         leaders = len(self.leaders)-1
         followers = len(self.followers)//2
         els = self.kill_nodes(leaders=leaders,followers=followers)
         self.wait_stability()
+
         self.stop_fogmon()
+        self.removed = []
 
-        # self.restart_nodes(els, conf)
-        # self.wait_stability()
-
-        self.start_session("base and nodes")
+        self.start_session(f"base and nodes {name}")
 
         self.start_fogmon(conf)
         self.wait_stability()
@@ -303,8 +309,11 @@ class Experimenter:
         leaders = len(self.leaders)-1
         els = self.kill_nodes(leaders=leaders,followers=0)
         self.wait_stability()
+
         self.stop_fogmon()
+        self.removed = []
         
+
         # self.start_session("links")
 
         # self.start_fogmon(conf)
@@ -327,15 +336,20 @@ class Experimenter:
 
         # self.stop_fogmon()
 
-    def test(self, conf):
-        self.start_session("base and nodes")
+    def test(self, conf, name):
+        self.start_session(f"base and nodes {name}")
 
         self.start_fogmon(conf)
         self.wait_stability()
 
-        self.start_moment("No change (just fooprint")
+        leaders = len(self.leaders)
+        leaders = 2 #if leaders < 25 else 3 if leaders < 35 else 4
+        followers = len(self.followers)//4
+        els = self.kill_nodes(leaders=leaders,followers=followers)
         self.wait_stability()
         self.stop_fogmon()
+        self.removed = []
+
 
 if __name__ == "__main__":
     import sys
@@ -358,28 +372,31 @@ if __name__ == "__main__":
         os.system("chmod 600 build/id_rsa")
         #path = input("insert topology file path [e.g. ./topology]\nAlso make sure that topology file is the same used to generate the spec.xml for the build path loaded: ")
         topology = Topology.load(sys.argv[1])
-        exp = Experimenter(topology)
-        if sys.argv[2] == "setup":
-            exp.setup()
-        elif sys.argv[2] == "network":
-            exp.restore_links(moment=False)
-        elif sys.argv[2] == "pull":
-            exp.pull()
-        elif sys.argv[2] == "start":
-            exp.start_experiment(configs["default"])
-        elif sys.argv[2] == "start2":
-            with open("../sessions.json","r") as rd:
-                exp.sessions = json.load(rd)
-            exp.start_experiment(configs["default"])
-        elif sys.argv[2] == "stop":
-            with open("../sessions.json","r") as rd:
-                exp.sessions = json.load(rd)
-            exp.spec = Spec(topology=exp.base_topology)
-            exp.stop_fogmon()
-        elif sys.argv[2] == "test":
-            with open("../sessions.json","r") as rd:
-                exp.sessions = json.load(rd)
-            exp.test(configs["default"])
-            
+        with Experimenter(topology) as exp:
+            if sys.argv[2] == "setup":
+                exp.setup()
+            elif sys.argv[2] == "network":
+                exp.restore_links(moment=False)
+            elif sys.argv[2] == "pull":
+                exp.pull()
+            elif sys.argv[2] == "start":
+                exit()
+                exp.start_experiment(configs[sys.argv[3]],sys.argv[3])
+            elif sys.argv[2] == "start2":
+                with open("../sessions.json","r") as rd:
+                    exp.sessions = json.load(rd)
+                exp.start_experiment(configs[sys.argv[3]],sys.argv[3])
+            elif sys.argv[2] == "stop":
+                with open("../sessions.json","r") as rd:
+                    exp.sessions = json.load(rd)
+                exp.spec = Spec(topology=exp.base_topology)
+                exp.stop_fogmon()
+            elif sys.argv[2] == "test":
+                with open("../sessions.json","r") as rd:
+                    exp.sessions = json.load(rd)
+                exp.spec = Spec(topology=exp.base_topology)
+                nodes= [node for node in exp.spec.spec["nodes"]]
+                exp.testbed_try(exp.testbed.kill,nodes=nodes)
+                
 
 

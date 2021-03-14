@@ -439,11 +439,11 @@ def startFogmonDefault(ctx):
     for conn in ctx.CONNS:
         if leader is None:
             # sudo docker run -it --net=host diunipisocc/liscio-fogmon:test --leader
-            conn.run(f"screen -d -m -S fogmon bash -c 'sudo docker run -it --net=host {images[0]} --leader {params} | tee log.txt'")
+            conn.run(f"screen -d -m -S fogmon bash -c 'sudo docker run -it --net=host --cap-add=NET_ADMIN {images[0]} --leader {params} | tee log.txt'")
             leader = conn.original_host
         else:
             # sudo docker run -it --net=host diunipisocc/liscio-fogmon:test -C node0
-            conn.run(f"screen -d -m -S fogmon bash -c 'sudo docker run -it --net=host {images[0]} -C {leader} {params} | tee log.txt'")
+            conn.run(f"screen -d -m -S fogmon bash -c 'sudo docker run -it --net=host --cap-add=NET_ADMIN {images[0]} -C {leader} {params} | tee log.txt'")
         print(conn.original_host)
 
 @task
@@ -456,16 +456,18 @@ def startFogmonValgrind(ctx):
     for conn in ctx.CONNS:
         if leader is None:
             # sudo docker run -it --net=host diunipisocc/liscio-fogmon:test --leader -s 3 -i 131.114.72.76:8248
-            conn.run(f"screen -d -m -S fogmon bash -c 'sudo docker run -it --net=host {images[1]} --leader {session} | tee log.txt'")
+            conn.run(f"screen -d -m -S fogmon bash -c 'sudo docker run -it --net=host --cap-add=NET_ADMIN {images[1]} --leader {session} | tee log.txt'")
             leader = conn.original_host
         else:
             # sudo docker run -it --net=host diunipisocc/liscio-fogmon:test -C node0
-            conn.run(f"screen -d -m -S fogmon bash -c 'sudo docker run -it --net=host {images[1]} -C {leader} {session} | tee log.txt'")
+            conn.run(f"screen -d -m -S fogmon bash -c 'sudo docker run -it --net=host --cap-add=NET_ADMIN {images[1]} -C {leader} {session} | tee log.txt'")
         print(conn.original_host)
 
 @task
 def startMonitor(ctx):
     script = """
+echo '' > test.log
+echo '' > bmon.log
 bmon -r 1 -o format:fmt='$(element:name) $(attr:rxrate:bytes) $(attr:txrate:bytes)\\n' -p $(ip route | grep default | sed -e 's/^.*dev.//' -e 's/.proto.*//') > bmon.log &
 P1=$!
 sudo docker stats --format '{{.Container}}\\t{{.CPUPerc}}\\t{{.MemUsage}}' > test.log &

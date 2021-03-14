@@ -7,6 +7,29 @@ IStorage::~IStorage() {
 
 }
 
+void IStorage::start() {
+    this->workerThread = thread(&IStorage::worker, this);
+    this->running = true;
+}
+
+void IStorage::stop() {
+    this->running = false;
+    if(this->workerThread.joinable())
+    {
+        this->workerThread.join();
+    }
+}
+
+void IStorage::worker() {
+    while(this->running.load()) {
+        function<void()> predicate;
+        if(!this->queue.pop(&predicate))
+            break;
+        predicate();
+    }
+    this->running = false;
+}
+
 void IStorage::open(string path) {
     int err = sqlite3_open(path.c_str(), &(this->db));
     if( err ){
@@ -15,8 +38,26 @@ void IStorage::open(string path) {
         exit(1);
     }
 
-    sqlite3_enable_load_extension(db, 1);
     char *zErrMsg = 0;
+
+    err = sqlite3_exec(this->db, "PRAGMA journal_mode = WAL", 0, 0, &zErrMsg);
+    if( err!=SQLITE_OK )
+    {
+        fprintf(stderr, "SQL error (pragme journal): %s\n", zErrMsg);
+        sqlite3_free(zErrMsg);
+        exit(1);
+    } 
+
+    err = sqlite3_exec(this->db, "PRAGMA synchronous = NORMAL", 0, 0, &zErrMsg);
+    if( err!=SQLITE_OK )
+    {
+        fprintf(stderr, "SQL error (pragma sync): %s\n", zErrMsg);
+        sqlite3_free(zErrMsg);
+        exit(1);
+    } 
+
+    sqlite3_enable_load_extension(db, 1);
+    
 
     err = sqlite3_exec(this->db, "SELECT load_extension('./libsqlitefunctions')", 0, 0, &zErrMsg);
     if( err!=SQLITE_OK )

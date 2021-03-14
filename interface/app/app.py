@@ -1,6 +1,7 @@
 import os
 from flask import Flask
 from flask_pymongo import PyMongo
+from pymongo import IndexModel, ASCENDING, DESCENDING
 import logging
 from views import blueprints
 from model import mongo
@@ -18,12 +19,14 @@ def make_app():
 
     mongo.init_app(app)
 
-    mongo.db.spec.create_index("session")
-    mongo.db.footprint.create_index("session")
-    mongo.db.reports.create_index("datetime")
-    mongo.db.reports.create_index("session")
-    mongo.db.update.create_index("datetime")
-    mongo.db.reports.create_index("session")
+    index_compoud = IndexModel([("datetime", DESCENDING),("session", ASCENDING)], name="session_datetime")
+    index_datetime = IndexModel([("datetime", DESCENDING)], name="datetime")
+    index_session = IndexModel([("session", DESCENDING)], name="session")
+
+    mongo.db.spec.create_indexes([index_session])
+    mongo.db.footprint.create_indexes([index_session])
+    mongo.db.reports.create_indexes([index_compoud,index_session,index_datetime])
+    mongo.db.update.create_indexes([index_compoud,index_session,index_datetime])
 
     return app
 

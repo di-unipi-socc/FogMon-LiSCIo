@@ -171,8 +171,6 @@ void FollowerConnections::handler(int fd, Message &m) {
             }else if(m.getArgument() == Message::Argument::REPORT) {
                 cout << "I'm not a leader anymore!?" << endl;
                 fflush(stdout);
-                shutdown(fd, SHUT_WR);
-                close(fd);
                 cout << "I'm not a leader anymore!? (closed)" << endl;
             }
         }

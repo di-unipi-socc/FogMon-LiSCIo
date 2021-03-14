@@ -277,14 +277,14 @@ void LeaderStorage::addMNode(Message::node node) {
 }
 
 vector<Report::report_result> LeaderStorage::getReport() {
-    sqlite3_exec(db, "BEGIN TRANSACTION;", NULL, NULL, NULL);
+    //sqlite3_exec(db, "BEGIN TRANSACTION;", NULL, NULL, NULL);
     vector<Message::node> ips = this->getAllNodes();
     vector<Report::report_result> res;
 
     for(auto ip : ips) {
         res.push_back(this->getReport(ip));
     }
-    sqlite3_exec(db, "END TRANSACTION;", NULL, NULL, NULL);
+    //sqlite3_exec(db, "END TRANSACTION;", NULL, NULL, NULL);
     return res;
 }
 
@@ -343,8 +343,10 @@ Report::report_result LeaderStorage::getReport(Message::node node) {
     std::sprintf(buf,"SELECT monitoredBy FROM MNodes WHERE id = \"%s\"", node.id.c_str());
     int err = sqlite3_exec(this->db, buf, IStorage::VectorStringCallback, &vec, &zErrMsg);
     isError(err, zErrMsg, "getReport getting leader");
-    r.leader = vec[0];
-
+    if (vec.size()!=0)
+        r.leader = vec[0];
+    else
+        r.leader = "";
     return r;
 }
 
@@ -352,7 +354,7 @@ Report::report_result LeaderStorage::getReport(Message::node node) {
 vector<Message::node> LeaderStorage::removeOldLNodes(int seconds, bool force) {
     char *zErrMsg = 0;
     char buf[1024];
-    sqlite3_exec(db, "BEGIN TRANSACTION;", NULL, NULL, NULL);
+    //sqlite3_exec(db, "BEGIN TRANSACTION;", NULL, NULL, NULL);
     vector<string> leaders;
 
     if(force) {
@@ -430,7 +432,7 @@ vector<Message::node> LeaderStorage::removeOldLNodes(int seconds, bool force) {
         isError(err, zErrMsg, "removeOldLNodesLeader10");
     }
 
-    sqlite3_exec(db, "END TRANSACTION;", NULL, NULL, NULL);
+    //sqlite3_exec(db, "END TRANSACTION;", NULL, NULL, NULL);
 
     rem.insert(rem.end(), vec.begin(), vec.end());
     return rem;
@@ -440,7 +442,7 @@ vector<Message::node> LeaderStorage::removeOldNodes(int seconds) {
     char *zErrMsg = 0;
     char buf[1024];
 
-    sqlite3_exec(db, "BEGIN TRANSACTION;", NULL, NULL, NULL);
+    //sqlite3_exec(db, "BEGIN TRANSACTION;", NULL, NULL, NULL);
 
     std::vector<Message::node> vec = this->getMLRHardware(100, seconds);
 
@@ -458,7 +460,7 @@ vector<Message::node> LeaderStorage::removeOldNodes(int seconds) {
         err = sqlite3_exec(this->db, buf, 0, 0, &zErrMsg);
         isError(err, zErrMsg, "removeOldNodesLeader3");
     }
-    sqlite3_exec(db, "END TRANSACTION;", NULL, NULL, NULL);
+    //sqlite3_exec(db, "END TRANSACTION;", NULL, NULL, NULL);
     return vec;   
 }
 
@@ -479,7 +481,7 @@ void LeaderStorage::removeChangeRole(std::vector<Message::node> leaders) {
     char *zErrMsg = 0;
     char buf[1024];
 
-    sqlite3_exec(db, "BEGIN TRANSACTION;", NULL, NULL, NULL);
+    //sqlite3_exec(db, "BEGIN TRANSACTION;", NULL, NULL, NULL);
 
     for(auto node : vec) {
         printf("Delete leader (change): %s\n", node.ip.c_str());
@@ -507,7 +509,7 @@ void LeaderStorage::removeChangeRole(std::vector<Message::node> leaders) {
             isError(err, zErrMsg, "removeOldLNodesLeader6");
         }
     }
-    sqlite3_exec(db, "END TRANSACTION;", NULL, NULL, NULL);  
+    //sqlite3_exec(db, "END TRANSACTION;", NULL, NULL, NULL);  
 }
 
 void LeaderStorage::complete() {

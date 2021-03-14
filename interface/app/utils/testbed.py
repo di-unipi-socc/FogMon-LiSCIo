@@ -82,6 +82,9 @@ def add_testbed(data):
             found = False
             for el in els:
                 if data == el["specs"][0]:
+                    if len(el["specs"]) != 1:
+                        if (datetime.now()-el["change_dates"][0]).total_seconds() > 60*60*5:
+                            break
                     found = True
                     break
             if found:

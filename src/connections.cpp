@@ -94,12 +94,19 @@ void Connections::worker() {
         Message m;
         try {
             if(this->getMessage(fd, m)) {
-                this->handler(fd, m);    
+                auto t_start = std::chrono::high_resolution_clock::now();
+                this->handler(fd, m);
+                auto t_end = std::chrono::high_resolution_clock::now();
+                auto elapsed_time = std::chrono::duration_cast<std::chrono::duration<float>>(t_end-t_start).count();
+                if (elapsed_time > 3) {
+                    cout << "handler " << elapsed_time << " " << m.getType() << " " << m.getCommand() << " " << m.getArgument() << endl;
+                } 
             }
         }catch(...) {
             
         }
-        shutdown(fd, SHUT_RDWR);
+        shutdown(fd, SHUT_WR);
+        shutdown(fd, SHUT_RD);
         close(fd);    
     }
     this->running = false;

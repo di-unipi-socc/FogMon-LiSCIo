@@ -2,6 +2,10 @@ cmake_minimum_required(VERSION 2.8.0)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+if (CMAKE_BUILD_TYPE STREQUAL "Debug")
+	SET(CMAKE_C_FLAGS "-g -O0 -Wall -W -fprofile-arcs -ftest-coverage")
+endif()
+
 project(FogMon CXX)
 
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/src ${CMAKE_CURRENT_SOURCE_DIR}/src/follower ${CMAKE_CURRENT_SOURCE_DIR}/src/leader ${CMAKE_CURRENT_SOURCE_DIR}/rapidjson/include ${CMAKE_CURRENT_SOURCE_DIR}/sigar/include)

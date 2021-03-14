@@ -156,7 +156,7 @@ void Follower::stop() {
 bool Follower::selectServer(vector<Message::node> mNodes) {
     //ask the MNodes list and select one MNode with the min latency
     cout << "Selecting server..." << endl;
-    
+
     //if is a leader connect to it
     if(!this->node->isFollower()) {
         if(!this->connections->sendHello(this->nodeS))
@@ -181,6 +181,9 @@ bool Follower::selectServer(vector<Message::node> mNodes) {
                 res[j].ip = mNodes[i].ip;
         }
         i++;
+    }
+    for(auto node : res) {
+        cout << "leader: " << node.ip << endl;
     }
     if(!res.empty())
         this->node->setMNodes(res);
@@ -558,9 +561,7 @@ void Follower::timer() {
         auto t_start = std::chrono::high_resolution_clock::now();
         //generate hardware report and send it
         this->getHardware();
-        cout << "update1" << endl;
         std::optional<std::pair<int64_t,Message::node>> ris = this->connections->sendUpdate(this->nodeS, this->update);
-        cout << "update2" << endl;
         if(ris == nullopt) {
             cout << "update retry..." << endl;
             ris = this->connections->sendUpdate(this->nodeS,this->update);
@@ -807,8 +808,7 @@ void Follower::changeRole(vector<Message::node> leaders) {
         cout << l.id << endl;
         if(l.id == this->myNode.id) {
             cout << "match!" << endl;
-            this->node->setMNodes(leaders);
-            this->node->promote();
+            this->node->promote(leaders);
             return;
         }
     }   

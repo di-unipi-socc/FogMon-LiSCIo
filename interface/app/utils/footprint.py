@@ -3,10 +3,14 @@ import logging
 import re
 
 def compute_footprint(session):
+    spec = get_spec(session)
     items = get_footprints(session)
     footprints = []
     logging.info([item["moment"] for item in items])
     for item in items:
+        # calc mean bandwidth for every node
+        moment = item["moment"]
+        Nodes = [k for k,v in spec["specs"][moment]["nodes"].items()]
         datas = item["data"]
         footprint = {}
         footprint["cpu"] = {"max": 0, "min": 9999999999, "mean": 0}
@@ -25,6 +29,8 @@ def compute_footprint(session):
                         v["min"] = val
                     v["mean"] += val
                 time += len(data["cpu"])
+            if time == 0:
+                continue
             v["mean"] /= time
         footprints.append(footprint)
     return footprints

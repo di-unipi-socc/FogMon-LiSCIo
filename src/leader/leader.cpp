@@ -121,16 +121,24 @@ void Leader::timerFun() {
         for(auto&& node : ips) {
             bool res = this->connections->sendRequestReport(node);
             if(!res) {
-                printf("Removing node from this group: %s\n",node.id.c_str());
+                printf("Removing node from this group: %s\n",node.ip.c_str());
                 rem.push_back(node);
             }
         }
-
+        {
+            auto t_end2 = std::chrono::high_resolution_clock::now();
+            auto elapsed_time2 = std::chrono::duration_cast<std::chrono::duration<float>>(t_end2-t_start).count();
+            cout << "timerFun1 " << elapsed_time2 << endl;
+        }
         //remove the nodes that failed to respond
         this->connections->sendRemoveNodes(rem);
         vector<Message::node> tmp;
         this->getStorage()->updateNodes(tmp,rem);   
-
+        {
+            auto t_end2 = std::chrono::high_resolution_clock::now();
+            auto elapsed_time2 = std::chrono::duration_cast<std::chrono::duration<float>>(t_end2-t_start).count();
+            cout << "timerFun2 " << elapsed_time2 << endl;
+        }
         //routine for LeaderNodes
         ips = this->getStorage()->getMNodes();
 
@@ -138,8 +146,8 @@ void Leader::timerFun() {
         bool force = true;
         if (num<1)
             num = 1;
-        int time = (int)(this->node->timePropagation*( log2(num)*3+2 ));
-        if (iter < 20) {
+        int time = (int)(this->node->timePropagation*( log2(num)*4+2 ));
+        if (iter < 400/this->node->timePropagation) {
             force = false;
             time += this->node->timePropagation*10;
         }
@@ -154,7 +162,11 @@ void Leader::timerFun() {
             tmp.clear();
             this->getStorage()->updateNodes(tmp,rem);
         }
-
+        {
+            auto t_end2 = std::chrono::high_resolution_clock::now();
+            auto elapsed_time2 = std::chrono::duration_cast<std::chrono::duration<float>>(t_end2-t_start).count();
+            cout << "timerFun3 " << elapsed_time2 << endl;
+        }
         int i=0;
         int sent=0;
         while(i < ips.size() && sent < 1) {
@@ -171,7 +183,11 @@ void Leader::timerFun() {
             }
             i++;
         }
-
+        {
+            auto t_end2 = std::chrono::high_resolution_clock::now();
+            auto elapsed_time2 = std::chrono::duration_cast<std::chrono::duration<float>>(t_end2-t_start).count();
+            cout << "timerFun4 " << elapsed_time2 << endl;
+        }
         if(iter % 4 == 0) {
             this->getStorage()->complete();
             {
@@ -184,7 +200,11 @@ void Leader::timerFun() {
                 this->selector.checkSelection(param);
             }
         }
-
+        {
+            auto t_end2 = std::chrono::high_resolution_clock::now();
+            auto elapsed_time2 = std::chrono::duration_cast<std::chrono::duration<float>>(t_end2-t_start).count();
+            cout << "timerFun5 " << elapsed_time2 << endl;
+        }
         auto t_end = std::chrono::high_resolution_clock::now();
         auto elapsed_time = std::chrono::duration_cast<std::chrono::duration<float>>(t_end-t_start).count();
         //std::cout << "timerFun1: "<< elapsed_time << " s"<< endl;
@@ -253,11 +273,8 @@ void Leader::changeRole(vector<Message::node> leaders) {
     if(!present) {
         printf("B\n");
         fflush(stdout);
-        this->iter = 1; 
-        this->node->setMNodes(leaders);
-        printf("C\n");
-        fflush(stdout);
-        this->node->demote();
+        this->iter = 1;
+        this->node->demote(leaders);
     }else {
         this->storage->removeChangeRole(leaders);
         printf("E\n");

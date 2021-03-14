@@ -6,7 +6,7 @@ import json
 import logging
 
 def accuracy(session):
-    #get_lastreports(session)
+    # get_lastreports(session)
     els = stabilities(session)
     accuracies = []
     for ((begin,end,reports_change,changes), spec) in els:
@@ -483,10 +483,16 @@ def baseErrors(report, spec):
                 same_leader = leaderA == leaderB
                 if same_leader:
                     links[T][nodeA][nodeB] = spec["links"][T][nodeA][nodeB]
+                else:
+                    if nodeA == leaderA and nodeB == leaderB:
+                        links[T][nodeA][nodeB] = spec["links"][T][nodeA][nodeB]
 
     error = {}
-    for T in ["B","L"]:
-        error[T] = {"mean": 0, "num": 0}
+    for T in ["B","L","B2"]:
+        T2= T
+        if T == "B2":
+            T="B"
+        error[T2] = {"mean": 0, "num": 0}
         for nodeA in leaders:
             leaderA = leaders[nodeA]
             for nodeB in leaders:
@@ -494,18 +500,20 @@ def baseErrors(report, spec):
                 same_leader = leaderA == leaderB
                 val = spec["links"][T][nodeA][nodeB]
                 if not same_leader:
-                    if T == "B":
-                        links[T][nodeA][nodeB] = min(max([v for k,v in links[T][nodeA].items()]),max([v for k,v in links[T][nodeB].items()]))
+                    if T2 == "B":
+                        links[T][nodeA][nodeB] = min(max([v for k,v in links[T][nodeA].items()]),max([v for k,v in links[T][nodeB].items()]))#,links[T][leaderA][leaderB])
+                    elif T2 == "B2":
+                        links[T][nodeA][nodeB] = min(min(max([v for k,v in links[T][nodeA].items()]),max([v for k,v in links[T][nodeB].items()])),links[T][leaderA][leaderB])
                     else:
                         links[T][nodeA][nodeB] = spec["links"][T][nodeA][leaderA]+spec["links"][T][leaderA][leaderB]+spec["links"][T][leaderB][nodeB]
-                    error[T]["num"] += 1
+                    error[T2]["num"] += 1
                     try:
-                        error[T]["mean"] += abs(links[T][nodeA][nodeB]-val)/val
+                        error[T2]["mean"] += abs(links[T][nodeA][nodeB]-val)/val
                     except:
                         logging.info(links[T][nodeA][nodeB])
                         logging.info(val)
                         raise
-    for T in ["B","L"]:
+    for T in ["B","L","B2"]:
         error[T]["mean"] /= error[T]["num"]
     logging.info("min error:")
     logging.info(error)

@@ -7,6 +7,10 @@
 #include "message.hpp"
 #include "report.hpp"
 #include "ithing.hpp"
+#include "queue.hpp"
+#include <thread>
+#include <atomic>
+#include <functional>
 
 /**
  * An sqlite3 abstract class for the database
@@ -25,6 +29,16 @@ public:
      * close the database
     */
     void close();
+
+    /**
+     * Start the listener thread
+    */
+    void start();
+
+    /**
+     * Stop the thread
+    */
+    void stop();
 
     /**
      * get the vector of nodes
@@ -138,9 +152,22 @@ protected:
     static int VectorIoTCallback(void *vec, int argc, char **argv, char **azColName);
 
     /**
+     * 
+    */
+    virtual void worker();
+
+    /**
      * the sqlite3 connection
     */
     sqlite3 *db;
+
+    Queue<std::function<void(void)>> queue;
+    std::atomic_bool running = false;
+    /**
+     * thread worker for the database
+    */
+    std::thread workerThread;
+
 };
 
 

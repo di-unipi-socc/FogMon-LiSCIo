@@ -73,7 +73,7 @@ void Node::create() {
     this->agent->setParent(this);
 }
 
-void Node::promote() {
+void Node::promote(std::vector<Message::node> nodes) {
     if(!isLeader) {
 
         isLeader = true;
@@ -81,11 +81,11 @@ void Node::promote() {
         if(this->restartThread.joinable())
             this->restartThread.join();
 
-        this->restartThread = thread(&Node::restart, this);
+        this->restartThread = thread(&Node::restart, this, nodes);
     }
 }
 
-void Node::demote() {
+void Node::demote(std::vector<Message::node> nodes) {
     if(isLeader) {
         
         isLeader = false;
@@ -93,15 +93,16 @@ void Node::demote() {
         if(this->restartThread.joinable())
             this->restartThread.join();
             
-        this->restartThread = thread(&Node::restart, this);
+        this->restartThread = thread(&Node::restart, this, nodes);
     }
 }
 
-void Node::restart() {
+void Node::restart(std::vector<Message::node> nodes) {
     sleep(1);
     sleep(1);
     this->stop();
     this->create();
+    this->setMNodes(nodes);
     this->start();
 }
 

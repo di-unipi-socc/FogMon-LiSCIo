@@ -25,10 +25,10 @@ public:
     bool setParam(std::string name, std::string value);
 
     //promote to leader if follower
-    virtual void promote();
+    virtual void promote(std::vector<Message::node> nodes);
 
     //demote to follower if leader
-    void demote();
+    void demote(std::vector<Message::node> nodes);
 
     void setMNodes(std::vector<Message::node> nodes);
     std::vector<Message::node> getMNodes();
@@ -71,7 +71,7 @@ protected:
     int threads;
     std::string port;
 
-    void restart();
+    void restart(std::vector<Message::node> nodes);
 
     void create();
 

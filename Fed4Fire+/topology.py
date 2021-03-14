@@ -180,7 +180,7 @@ class Topology:
 if __name__ == "__main__":
     import sys
     from clusterer import Clusterer
-    for seed in range(700,1000):
+    for seed in range(500,3000):
         random.seed(seed)
         if seed % 50 ==0:
             print(f"{seed}\r", flush=True, end="")

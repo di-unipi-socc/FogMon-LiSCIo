@@ -15,12 +15,15 @@ RUN cp $(ls ./Bin/*/*) /
 ADD . /compile
 WORKDIR /compile
 
-RUN cmake . -DCMAKE_BUILD_TYPE=Debug
+#RUN cmake . -DCMAKE_BUILD_TYPE=Debug
+RUN cmake .
 RUN make
 RUN cp ./FogMon /
 RUN cp ./libsqlitefunctions.so /
 WORKDIR /
 
 RUN rm -Rf /compile
+#
+RUN dnf install -y iproute
 ENTRYPOINT ["/FogMon"]
 CMD []

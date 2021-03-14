@@ -182,7 +182,7 @@ bool Selector::checkSelection(bool qualityCheck, bool doit) {
             
             float quality = (float)doc["quality"].GetDouble();
             printf("quality check (cost = %f)\n",quality);
-            if(quality > 10){
+            if(quality > 20){
                 printf("STARTING SELECTION (bad quality)\n");
                 this->startSelection();
                 return true;
