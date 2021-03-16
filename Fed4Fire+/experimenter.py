@@ -241,7 +241,7 @@ class Experimenter:
             params = self.build_params(conf)
             self.testbed_try(self.testbed.start,followers = nodes, leader=self.leaders[0], params=params,only_followers=True)
 
-    def change_links(self, percentage, B, L, moment = True):
+    def change_links(self, percentage, B, L, moment = True, apply = True):
         if moment:
             self.stop_monitor()
         self.used_topology.modify_links(percentage, B, L)
@@ -249,8 +249,9 @@ class Experimenter:
         self.spec.remove_nodes(self.removed)
         if moment:
             self.start_moment(f"change links {percentage}% {B}MB {L}ms")
-        spec = self.spec.spec
-        self.testbed_try(self.testbed.set_links,spec=spec)
+        if apply:
+            spec = self.spec.spec
+            self.testbed_try(self.testbed.set_links,spec=spec)
 
     def restore_links(self, moment = True, apply = True):
         if moment:
@@ -274,20 +275,77 @@ class Experimenter:
         # apply links
 
     def start_experiment(self, conf, name):
-        self.start_session(f"base and nodes {name}")
+        # self.start_session(f"base and nodes {name}")
+
+        # self.start_fogmon(conf)
+        # self.wait_stability()
+
+        # leaders = len(self.leaders)
+        # leaders = 2 #if leaders < 25 else 3 if leaders < 35 else 4
+        # followers = len(self.followers)//4
+        # els = self.kill_nodes(leaders=leaders,followers=followers)
+        # self.wait_stability()
+        # self.stop_fogmon()
+        # self.removed = []
+
+
+        # self.start_session(f"base and nodes {name}")
+        
+        # self.start_fogmon(conf)
+        # self.wait_stability()
+
+        # leaders = len(self.leaders)-1
+        # followers = len(self.followers)//2
+        # els = self.kill_nodes(leaders=leaders,followers=followers)
+        # self.wait_stability()
+
+        # self.stop_fogmon()
+        # self.removed = []
+
+        # self.start_session(f"base and nodes {name}")
+
+        # self.start_fogmon(conf)
+        # self.wait_stability()
+
+        # leaders = len(self.leaders)-1
+        # els = self.kill_nodes(leaders=leaders,followers=0)
+        # self.wait_stability()
+
+        # self.stop_fogmon()
+        # self.removed = []
+        
+
+        self.start_session("links 1")
 
         self.start_fogmon(conf)
         self.wait_stability()
 
-        leaders = len(self.leaders)
-        leaders = 2 #if leaders < 25 else 3 if leaders < 35 else 4
-        followers = len(self.followers)//4
-        els = self.kill_nodes(leaders=leaders,followers=followers)
+        self.change_links(5,100,500)
         self.wait_stability()
+        self.restore_links(moment=False)
         self.stop_fogmon()
-        self.removed = []
+        
+        self.start_session("links 2")
 
+        self.start_fogmon(conf)
+        self.wait_stability()
 
+        self.change_links(5,100,500)
+        self.wait_stability()
+        self.restore_links(moment=False)
+        self.stop_fogmon()
+
+        # self.start_session("links 3")
+
+        # self.start_fogmon(conf)
+        # self.wait_stability()
+
+        # self.isolate_group(1)
+        # self.wait_stability()
+        # self.restore_links(moment=False,apply=False)
+        # self.stop_fogmon()
+
+    def test(self, conf, name):
         self.start_session(f"base and nodes {name}")
         
         self.start_fogmon(conf)
@@ -298,55 +356,6 @@ class Experimenter:
         els = self.kill_nodes(leaders=leaders,followers=followers)
         self.wait_stability()
 
-        self.stop_fogmon()
-        self.removed = []
-
-        self.start_session(f"base and nodes {name}")
-
-        self.start_fogmon(conf)
-        self.wait_stability()
-
-        leaders = len(self.leaders)-1
-        els = self.kill_nodes(leaders=leaders,followers=0)
-        self.wait_stability()
-
-        self.stop_fogmon()
-        self.removed = []
-        
-
-        # self.start_session("links")
-
-        # self.start_fogmon(conf)
-        # self.wait_stability()
-
-        # self.change_links(5,100,500)
-        # self.wait_stability()
-        # self.restore_links()
-        # self.wait_stability()
-
-        # self.change_links(10,100,500)
-        # self.wait_stability()
-        # self.restore_links()
-        # self.wait_stability()
-
-        # links = self.isolate_group(1)
-        # self.wait_stability()
-        # self.restore_links(links)
-        # self.wait_stability()
-
-        # self.stop_fogmon()
-
-    def test(self, conf, name):
-        self.start_session(f"base and nodes {name}")
-
-        self.start_fogmon(conf)
-        self.wait_stability()
-
-        leaders = len(self.leaders)
-        leaders = 2 #if leaders < 25 else 3 if leaders < 35 else 4
-        followers = len(self.followers)//4
-        els = self.kill_nodes(leaders=leaders,followers=followers)
-        self.wait_stability()
         self.stop_fogmon()
         self.removed = []
 
@@ -368,6 +377,12 @@ if __name__ == "__main__":
             # Extract all the contents of zip file in build directory
             zipObj.extractall("build")
         os.system("chmod 600 build/id_rsa")
+        if len(sys.argv) ==4:
+            with ZipFile(sys.argv[1], 'r') as zipObj:
+                # Extract all the contents of zip file in build directory
+                zipObj.extractall("build2")
+            os.system("chmod 600 build2/id_rsa")
+            # fuse
     elif sys.argv[2] in  ["setup", "network","pull", "start", "start2", "stop", "test"]:
         os.system("chmod 600 build/id_rsa")
         #path = input("insert topology file path [e.g. ./topology]\nAlso make sure that topology file is the same used to generate the spec.xml for the build path loaded: ")
@@ -394,9 +409,17 @@ if __name__ == "__main__":
             elif sys.argv[2] == "test":
                 with open("../sessions.json","r") as rd:
                     exp.sessions = json.load(rd)
-                exp.spec = Spec(topology=exp.base_topology)
-                nodes= [node for node in exp.spec.spec["nodes"]]
-                exp.testbed_try(exp.testbed.kill,nodes=nodes)
+                exp.change_links(5,100,500, moment=False,apply=False)
+                topology = exp.used_topology
+
+                from clusterer import Clusterer
+                selected = topology.selected
+                M = topology.matrix(selected)
+                clusterer = Clusterer([selected[0]],selected,M[0])
+                                
+                data = clusterer.cluster(10000)
+                print(data)
+                topology.plot(data["new_leaders"], data["clusters"])
                 
 
 

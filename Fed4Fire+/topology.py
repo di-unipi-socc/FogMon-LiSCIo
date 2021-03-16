@@ -126,14 +126,18 @@ class Topology:
         return M
     
     def modify_links(self, percentage, B, L):
-        def modify_links_(node):
+        def modify_links_(node, num=0,sel=[]):
             for i in range(len(node.childs)):
                 child = node.childs[i]
-                r = random.randint(1,100)
-                if r<=percentage:
+                if num in sel:
                     node.costs[i] = (L,B)
-                modify_links_(child)
-        modify_links_(self.tree)
+                num+=1
+                num = modify_links_(child,num,sel)
+            return num
+        num = modify_links_(self.tree)
+        sel = random.sample([i for i in range(num)],k=int(num*percentage/100))
+        print(f"num = {num}, {sel}, {percentage}%")
+        num = modify_links_(self.tree,sel=sel)
 
 
     def save(self, path):
@@ -180,7 +184,7 @@ class Topology:
 if __name__ == "__main__":
     import sys
     from clusterer import Clusterer
-    for seed in range(500,3000):
+    for seed in range(200,3000):
         random.seed(seed)
         if seed % 50 ==0:
             print(f"{seed}\r", flush=True, end="")
@@ -260,8 +264,11 @@ if __name__ == "__main__":
             json.dump(spec.spec, wr)
 
         # save the xml spec
-        with open(f"spec-xml-{num}-{seed}","w") as wr:
-            wr.write(spec.print_spec())
+        xml1,xml2 = spec.print_spec(division=True)
+        with open(f"spec-xml-{num}-{seed}-1","w") as wr:
+            wr.write(xml1)
+        with open(f"spec-xml-{num}-{seed}-2","w") as wr:
+            wr.write(xml2)
 
         # save the spec.json
         with open(f"spec-json-{num}-{seed}","w") as wr:

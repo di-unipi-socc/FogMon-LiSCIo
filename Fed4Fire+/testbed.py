@@ -307,7 +307,7 @@ class Testbed:
         self.wait_script("pull", nodes,timeout=5)
 
     def clean(self, nodes):
-        self.exec_script("clean", ["sudo docker kill $(sudo docker ps -q)","sudo pkill -9 -f emulab-networkd.sh ; echo $?","sudo truncate -s 0 /var/log/syslog","sudo rm /var/log/syslog.*", "sudo killall screen ; echo $?"], nodes)
+        self.exec_script("clean", ["sudo docker kill $(sudo docker ps -q)","sudo pkill -9 -f emulab-networkd.sh ; echo $?","sudo truncate -s 0 /var/log/syslog","sudo rm /var/log/syslog.*", "sudo rm -y log.txt", "sudo killall screen ; echo $?"], nodes)
         self.wait_script("clean", nodes)
 
     def start(self, followers, leader, params, image=fogmon_images[0], only_followers = False):

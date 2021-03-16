@@ -98,23 +98,32 @@ class Spec:
             image = Ubuntu.CITY
          nodes["node"+str(id)] = {"testbed": testbed, "image": image,"if": []}
 
-   def print_spec(self):
+   def print_spec(self, division=False):
       """
       return the spec in an xml format
       """
+      if division:
+         text2 = self.start
       text = self.start
       nodes= self.spec["nodes"]
       links= self.spec["links"]
       x = 0
       y = 0
       for n,v in nodes.items():
-         text+= '<node client_id="%s" exclusive="true" component_manager_id="%s">\n<sliver_type name="raw-pc">\n<disk_image name="%s"/>\n</sliver_type>\n'%(n,v["testbed"].value,v["image"].value)
-         text+= '<location xmlns="http://jfed.iminds.be/rspec/ext/jfed/1" x="%d" y="%d"/>\n'%(x,y)
+         nodeT= '<node client_id="%s" exclusive="true" component_manager_id="%s">\n<sliver_type name="raw-pc">\n<disk_image name="%s"/>\n</sliver_type>\n'%(n,v["testbed"].value,v["image"].value)
+         nodeT+= '<location xmlns="http://jfed.iminds.be/rspec/ext/jfed/1" x="%d" y="%d"/>\n'%(x,y)
          x+=10
          y+=10
-         text+= '</node>\n'
+         nodeT+= '</node>\n'
+         if division and v["testbed"] == TestBeds.CITY:
+            text2 += nodeT
+            continue
+         text+=nodeT
       
       text+=self.end
+      if division:
+         text2 += self.end
+         return text,text2
       return text
    
    def create_from_topology(self, topology):      
@@ -129,7 +138,7 @@ class Spec:
          if m < 30:
             testbed = TestBeds.WALL1 # TODO: decide testbed
          else:
-            testbed = TestBeds.WALL2
+            testbed = TestBeds.CITY
          matrix.append((latencies,uploads,testbed))
          m+=1
       # this take the matrix and create the nodes

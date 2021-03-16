@@ -27,6 +27,9 @@ def make_app():
     mongo.db.footprint.create_indexes([index_session])
     mongo.db.reports.create_indexes([index_compoud,index_session,index_datetime])
     mongo.db.update.create_indexes([index_compoud,index_session,index_datetime])
+    for index in mongo.db.reports.list_indexes():
+        logging.info(index)
+    
 
     return app
 

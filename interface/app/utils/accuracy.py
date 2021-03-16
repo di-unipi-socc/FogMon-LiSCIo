@@ -488,9 +488,9 @@ def baseErrors(report, spec):
                         links[T][nodeA][nodeB] = spec["links"][T][nodeA][nodeB]
 
     error = {}
-    for T in ["B","L","B2"]:
+    for T in ["B","L","B2","B3"]:
         T2= T
-        if T == "B2":
+        if T == "B2" or T == "B3":
             T="B"
         error[T2] = {"mean": 0, "num": 0}
         for nodeA in leaders:
@@ -503,6 +503,8 @@ def baseErrors(report, spec):
                     if T2 == "B":
                         links[T][nodeA][nodeB] = min(max([v for k,v in links[T][nodeA].items()]),max([v for k,v in links[T][nodeB].items()]))#,links[T][leaderA][leaderB])
                     elif T2 == "B2":
+                        links[T][nodeA][nodeB] = min(links[T][leaderA][leaderB],links[T][nodeA][leaderA],links[T][leaderB][nodeB])
+                    elif T2 == "B3":
                         links[T][nodeA][nodeB] = min(min(max([v for k,v in links[T][nodeA].items()]),max([v for k,v in links[T][nodeB].items()])),links[T][leaderA][leaderB])
                     else:
                         links[T][nodeA][nodeB] = spec["links"][T][nodeA][leaderA]+spec["links"][T][leaderA][leaderB]+spec["links"][T][leaderB][nodeB]

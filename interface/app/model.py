@@ -76,6 +76,8 @@ def get_reports(session, ids=None, begin=None, end=None, limit=0):
         query["sender.id"] = {"$in": ids }
 
     cursor = mongo.db.reports.find(query, projection={'_id': False}).sort([("datetime", -1)])
+    #logging.info(f"exaplain get reports {session}")
+    #logging.info(cursor.explain())
     if limit != 0:
         cursor.limit(limit)
     return clean_results(cursor)
